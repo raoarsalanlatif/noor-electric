@@ -1,105 +1,159 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import styled from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faBars, faTimes } from '@fortawesome/free-solid-svg-icons';
-import { colors, breakpoints } from '../../styles/variables';
+import { faBars, faXmark, faPhone } from '@fortawesome/free-solid-svg-icons';
+import { brand, fonts } from '../../styles/variables';
+import { company, img } from '../../content/company';
+import { ButtonLink } from '../ui/primitives';
 
-const Nav = styled.nav`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem 6%;
-  background: ${colors.light};
+const Bar = styled.header`
   position: fixed;
-  width: 100%;
-  top: 0;
+  inset: 0 0 auto 0;
   z-index: 1000;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  background: rgba(255,255,255,${(p) => (p.$scrolled ? 0.96 : 1)});
+  backdrop-filter: saturate(160%) blur(10px);
+  border-bottom: 1px solid ${(p) => (p.$scrolled ? brand.line : 'transparent')};
+  box-shadow: ${(p) => (p.$scrolled ? '0 6px 24px rgba(10,31,77,0.08)' : 'none')};
+  transition: box-shadow 0.25s, border-color 0.25s;
 `;
 
-const Logo = styled(Link)`
-  color: ${colors.primaryBlue};
-  text-decoration: none;
-  font-size: 1.5rem;
-  font-weight: bold;
-`;
-
-const NavLinks = styled.div`
-  @media (max-width: ${breakpoints.mobile}) {
-    position: fixed;
-    top: 0;
-    right: ${props => props.isOpen ? '0' : '-70%'};
-    height: 100vh;
-    width: 70%;
-    background: ${colors.primaryBlue};
-    transition: 0.3s ease-in-out;
-    padding: 2rem;
-  }
-`;
-
-const NavList = styled.ul`
+const Inner = styled.div`
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+  height: 76px;
   display: flex;
-  list-style: none;
-  
-  @media (max-width: ${breakpoints.mobile}) {
-    flex-direction: column;
-  }
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  @media (max-width: 600px) { padding: 0 16px; height: 68px; }
 `;
 
-const NavItem = styled.li`
-  margin: 0 1rem;
-  
-  @media (max-width: ${breakpoints.mobile}) {
-    margin: 1rem 0;
-  }
-`;
-
-const NavLink = styled(Link)`
-  color: ${colors.dark};
+const Brand = styled(Link)`
+  display: flex;
+  align-items: center;
+  gap: 12px;
   text-decoration: none;
-  transition: 0.3s;
+  img { width: 46px; height: 46px; }
+  strong { display: block; font-family: ${fonts.heading}; font-weight: 800; font-size: 1.12rem; color: ${brand.navy}; line-height: 1.05; }
+  small { display: block; font-family: ${fonts.heading}; font-weight: 700; font-size: 0.62rem; letter-spacing: 0.32em; color: #fff;
+    background: ${brand.blue}; padding: 2px 6px; border-radius: 3px; margin-top: 3px; width: fit-content; }
+  @media (max-width: 380px) { img { width: 40px; height: 40px; } strong { font-size: 1rem; } }
+`;
 
-  &:hover {
-    color: ${colors.primaryOrange};
+const Links = styled.nav`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  a.link {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: ${brand.text};
+    text-decoration: none;
+    padding: 8px 12px;
+    border-radius: 8px;
+    transition: color 0.2s, background 0.2s;
   }
+  a.link:hover { color: ${brand.blue}; background: ${brand.bgSoft}; }
+  a.link.active { color: ${brand.blue}; }
+  a.planner { color: ${brand.orange}; }
 
-  @media (max-width: ${breakpoints.mobile}) {
-    color: ${colors.light};
+  @media (max-width: 1024px) {
+    position: fixed;
+    top: 68px;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    padding: 16px;
+    background: #fff;
+    border-bottom: 1px solid ${brand.line};
+    box-shadow: 0 20px 40px rgba(10,31,77,0.12);
+    transform: translateY(${(p) => (p.$open ? '0' : '-120%')});
+    opacity: ${(p) => (p.$open ? 1 : 0)};
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    a.link { padding: 14px 12px; font-size: 1.05rem; }
   }
 `;
 
-const MenuIcon = styled.div`
+const Actions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  .phone { display: flex; align-items: center; gap: 8px; color: ${brand.navy}; font-weight: 700; text-decoration: none; font-size: 0.92rem; }
+  .phone svg { color: ${brand.blue}; }
+  @media (max-width: 1180px) { .phone { display: none; } }
+  @media (max-width: 1024px) { .cta { display: none; } }
+`;
+
+const MenuButton = styled.button`
   display: none;
+  border: 1px solid ${brand.line};
+  background: #fff;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  color: ${brand.navy};
+  font-size: 1.2rem;
   cursor: pointer;
-  
-  @media (max-width: ${breakpoints.mobile}) {
-    display: block;
-  }
+  @media (max-width: 1024px) { display: grid; place-items: center; }
 `;
+
+const MobileCta = styled.div`
+  display: none;
+  @media (max-width: 1024px) { display: flex; gap: 10px; margin-top: 10px; a { flex: 1; } }
+`;
+
+const NAV = [
+  { to: '/', label: 'Home', end: true },
+  { to: '/services', label: 'Services' },
+  { to: '/projects', label: 'Projects' },
+  { to: '/about', label: 'About' },
+  { to: '/contact', label: 'Contact' },
+];
 
 function Navbar() {
-  const [isOpen, setIsOpen] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const { pathname } = useLocation();
 
-  const toggleMenu = () => setIsOpen(!isOpen);
+  useEffect(() => { setOpen(false); window.scrollTo(0, 0); }, [pathname]);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   return (
-    <Nav>
-      <Logo to="/">Noor Electric</Logo>
-      <MenuIcon onClick={toggleMenu}>
-        <FontAwesomeIcon icon={isOpen ? faTimes : faBars} />
-      </MenuIcon>
-      <NavLinks isOpen={isOpen}>
-        <NavList>
-          <NavItem><NavLink to="/" onClick={toggleMenu}>Home</NavLink></NavItem>
-          <NavItem><NavLink to="/about" onClick={toggleMenu}>About Us</NavLink></NavItem>
-          <NavItem><NavLink to="/services" onClick={toggleMenu}>Services</NavLink></NavItem>
-          <NavItem><NavLink to="/projects" onClick={toggleMenu}>Projects</NavLink></NavItem>
-          <NavItem><NavLink to="/planner" onClick={toggleMenu}>Solar Planner</NavLink></NavItem>
-          <NavItem><NavLink to="/contact" onClick={toggleMenu}>Contact</NavLink></NavItem>
-        </NavList>
-      </NavLinks>
-    </Nav>
+    <Bar $scrolled={scrolled || open}>
+      <Inner>
+        <Brand to="/" aria-label={`${company.name} home`}>
+          <img src={img('logo-192.png')} alt="" width="46" height="46" />
+          <span><strong>Noor Electric</strong><small>RENEWABLES</small></span>
+        </Brand>
+
+        <Links $open={open} aria-label="Main">
+          {NAV.map((n) => (
+            <NavLink key={n.to} to={n.to} end={n.end} className="link">{n.label}</NavLink>
+          ))}
+          <NavLink to="/planner" className="link planner">Solar Planner</NavLink>
+          <MobileCta>
+            <ButtonLink to="/contact">Free site survey</ButtonLink>
+          </MobileCta>
+        </Links>
+
+        <Actions>
+          <a className="phone" href={`tel:${company.phones[0].tel}`}><FontAwesomeIcon icon={faPhone} />{company.phones[0].display}</a>
+          <ButtonLink className="cta" to="/contact">Free site survey</ButtonLink>
+          <MenuButton type="button" aria-label={open ? 'Close menu' : 'Open menu'} aria-expanded={open} onClick={() => setOpen(!open)}>
+            <FontAwesomeIcon icon={open ? faXmark : faBars} />
+          </MenuButton>
+        </Actions>
+      </Inner>
+    </Bar>
   );
 }
 
