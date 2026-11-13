@@ -14,7 +14,7 @@ export { default as Home } from './Home';
 
 export const AboutPage = () => (
   <>
-    <PageHeader title="About Noor Electric Renewables" crumb="About" subtitle="A Peshawar-based solar company led by engineers, built on honest sizing and quality workmanship." />
+    <PageHeader title="About Noor Electric Renewables" crumb="About" subtitle="Noor Electric (Pvt.) Ltd. — 4+ years and 500+ domestic and commercial solar projects across KP and Islamabad." />
     <AboutSection />
     <LeadershipSection tone="soft" />
     <StatsSection />
