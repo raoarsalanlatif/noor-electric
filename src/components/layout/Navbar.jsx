@@ -95,6 +95,7 @@ function Navbar() {
           <NavItem><NavLink to="/about" onClick={toggleMenu}>About Us</NavLink></NavItem>
           <NavItem><NavLink to="/services" onClick={toggleMenu}>Services</NavLink></NavItem>
           <NavItem><NavLink to="/projects" onClick={toggleMenu}>Projects</NavLink></NavItem>
+          <NavItem><NavLink to="/planner" onClick={toggleMenu}>Solar Planner</NavLink></NavItem>
           <NavItem><NavLink to="/contact" onClick={toggleMenu}>Contact</NavLink></NavItem>
         </NavList>
       </NavLinks>
