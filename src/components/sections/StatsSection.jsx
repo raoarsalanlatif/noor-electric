@@ -66,9 +66,9 @@ function StatsSection() {
             <Heading>Stop being a tenant to the grid. <span>Own your energy.</span></Heading>
             <Lead>Pure savings, zero pollution and total peace of mind — with a local team in Peshawar that picks up the phone after installation.</Lead>
             <Stats>
-              <div><b>5+</b><span>years of solar engineering</span></div>
+              <div><b>{company.projectsCompleted}</b><span>domestic &amp; commercial projects</span></div>
+              <div><b>{company.yearsInBusiness}</b><span>years in business</span></div>
               <div><b>{company.facebookFollowers}</b><span>Facebook followers</span></div>
-              <div><b>40 kW</b><span>largest recent hybrid upgrade</span></div>
             </Stats>
           </Reveal>
           <Benefits>

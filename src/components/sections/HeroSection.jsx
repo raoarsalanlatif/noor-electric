@@ -1,7 +1,7 @@
 import styled, { keyframes } from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSolarPanel, faBolt, faShieldHalved, faArrowRight, faCircleCheck } from '@fortawesome/free-solid-svg-icons';
-import { faWhatsapp, faFacebookF } from '@fortawesome/free-brands-svg-icons';
+import { faWhatsapp } from '@fortawesome/free-brands-svg-icons';
 import { brand, fonts } from '../../styles/variables';
 import { company, img, whatsappLink } from '../../content/company';
 import { Container, ButtonLink, ButtonA, GridPattern } from '../ui/primitives';
@@ -174,7 +174,7 @@ function HeroSection() {
       <Container>
         <Layout>
           <div>
-            <Pill><i><FontAwesomeIcon icon={faFacebookF} /></i>{company.facebookFollowers}+ followers trust Noor Electric</Pill>
+            <Pill><i><FontAwesomeIcon icon={faSolarPanel} /></i>{company.projectsCompleted} projects · {company.yearsInBusiness} years powering KP &amp; Islamabad</Pill>
             <Title>Reliable <span>solar solutions</span> for your home &amp; business</Title>
             <Sub>{company.bio}</Sub>
             <Ctas>
@@ -199,7 +199,7 @@ function HeroSection() {
             <MobileCards>
               <FloatCard style={{ top: -22, left: -26 }}>
                 <i><FontAwesomeIcon icon={faSolarPanel} /></i>
-                <div><b>12 kW hybrid</b><small>Energized · Islamabad</small></div>
+                <div><b>{company.projectsCompleted} projects</b><small>Homes &amp; businesses</small></div>
               </FloatCard>
               <FloatCard style={{ top: '46%', left: -40 }} $delay="1.2s" $tint={brand.blue}>
                 <i><FontAwesomeIcon icon={faBolt} /></i>
