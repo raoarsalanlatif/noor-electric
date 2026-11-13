@@ -165,7 +165,7 @@ const statusIcon = { ok: faCircleCheck, warn: faTriangleExclamation, fail: faCir
 
 export default function SolarPlanner() {
   const [load, setLoad] = useState(DEFAULT_LOAD);
-  const [cityId, setCityId] = useState('lahore');
+  const [cityId, setCityId] = useState('peshawar');
   const [roof, setRoof] = useState({ width: 9, length: 12 });
   const [panelWatts, setPanelWatts] = useState(550);
   const [mode, setMode] = useState('auto');

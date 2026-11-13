@@ -2,8 +2,8 @@
 // All money values are in PKR and are INDICATIVE — update them to your current price list.
 
 export const PLANNER_CONFIG = {
-  // Replace with the company WhatsApp number in international format, digits only (e.g. 923001234567).
-  whatsappNumber: '923000000000',
+  // Company WhatsApp number in international format, digits only.
+  whatsappNumber: '923409566404',
 
   // Pricing (indicative)
   costPerKW: 110000, // panels + inverter + structure + installation, per kW
