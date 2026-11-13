@@ -5,6 +5,7 @@ import { faLocationDot, faPhone, faClock, faPaperPlane } from '@fortawesome/free
 import { faWhatsapp } from '@fortawesome/free-brands-svg-icons';
 import { brand, fonts } from '../../styles/variables';
 import { company, whatsappLink } from '../../content/company';
+import { post } from '../../lib/api';
 import { Section, Container, Eyebrow, Heading, Lead, ButtonEl } from '../ui/primitives';
 
 const Layout = styled.div`
@@ -72,7 +73,7 @@ const Form = styled.form`
 const SYSTEMS = ['Not sure yet', 'On-grid (net-metering)', 'Hybrid with battery', 'Commercial / industrial', 'Maintenance or upgrade'];
 
 function ContactSection() {
-  const [f, setF] = useState({ name: '', phone: '', city: '', system: SYSTEMS[0], bill: '', message: '' });
+  const [f, setF] = useState({ name: '', phone: '', city: '', system: SYSTEMS[0], bill: '', message: '', website: '' });
   const [err, setErr] = useState('');
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
 
@@ -91,6 +92,11 @@ function ContactSection() {
       f.message && `Message: ${f.message}`,
     ].filter(Boolean).join('\n');
     window.open(whatsappLink(text), '_blank', 'noopener');
+    // Also save the request in the admin panel (WhatsApp still opens if this fails).
+    post('public/quotes', {
+      source: 'contact', name: f.name, phone: f.phone, city: f.city, systemType: f.system,
+      monthlyBill: f.bill.replace(/\D/g, ''), message: f.message, website: f.website,
+    }).catch(() => {});
   };
 
   return (
@@ -140,6 +146,7 @@ function ContactSection() {
                 <select id="c-system" value={f.system} onChange={set('system')}>{SYSTEMS.map((s) => <option key={s}>{s}</option>)}</select>
               </div>
               <div className="full"><label htmlFor="c-msg">Message (optional)</label><textarea id="c-msg" value={f.message} onChange={set('message')} /></div>
+              <input type="text" name="website" value={f.website} onChange={set('website')} tabIndex={-1} autoComplete="off" aria-hidden="true" style={{ position: 'absolute', left: '-9999px', width: 1, height: 1 }} />
               {err && <div className="full err" role="alert">{err}</div>}
               <div className="full"><ButtonEl type="submit" style={{ width: '100%' }}><FontAwesomeIcon icon={faPaperPlane} /> Send on WhatsApp</ButtonEl></div>
             </div>

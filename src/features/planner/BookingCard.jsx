@@ -5,6 +5,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCalendarCheck, faCircleCheck } from '@fortawesome/free-solid-svg-icons';
 import { Card, CardTitle, TextInput, Button, Label, t } from './ui';
 import { PLANNER_CONFIG } from './config';
+import { post } from '../../lib/api';
 
 const Form = styled.form`
   display: grid;
@@ -24,7 +25,6 @@ const Done = styled.div`
 
 const Error = styled.div` color: #fca5a5; font-size: 0.85rem; `;
 
-const STORAGE_KEY = 'noor-planner-leads';
 
 function summary(plan, form) {
   const lines = [
@@ -55,13 +55,29 @@ export default function BookingCard({ plan }) {
     if (!form.name.trim()) return setErr('Please enter your name.');
     if (digits.length < 10) return setErr('Please enter a valid phone number.');
     setErr('');
-    const lead = { ...form, createdAt: new Date().toISOString(), plan: summary(plan, form) };
-    // TODO: send `lead` to the backend (Firebase/Supabase) once it is set up.
-    try {
-      const prev = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-      localStorage.setItem(STORAGE_KEY, JSON.stringify([...prev, lead]));
-    } catch { /* storage unavailable */ }
-    window.open(`https://wa.me/${PLANNER_CONFIG.whatsappNumber}?text=${encodeURIComponent(lead.plan)}`, '_blank', 'noopener');
+    const text = summary(plan, form);
+    window.open(`https://wa.me/${PLANNER_CONFIG.whatsappNumber}?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+    // Save the request with the full design in the admin panel (WhatsApp still opens if this fails).
+    post('public/quotes', {
+      source: 'planner',
+      name: form.name,
+      phone: form.phone,
+      area: form.area,
+      city: plan.city.name,
+      preferredDate: form.date,
+      systemType: `${plan.systemKW.toFixed(1)} kW ${plan.chosen.batteryKWh ? 'hybrid' : 'on-grid'}`,
+      monthlyBill: Math.round(plan.billBefore),
+      plan: {
+        summary: text,
+        systemKW: Number(plan.systemKW.toFixed(2)),
+        panels: plan.chosen.panels,
+        inverterKW: plan.chosen.inverterKW,
+        batteryKWh: plan.chosen.batteryKWh,
+        dailyKWh: Number(plan.dailyKWh.toFixed(1)),
+        status: plan.status,
+        estimatedCost: Math.round(plan.cost),
+      },
+    }).catch(() => {});
     setSent(true);
     return undefined;
   };
@@ -73,7 +89,7 @@ export default function BookingCard({ plan }) {
         <Done>
           <FontAwesomeIcon icon={faCircleCheck} />
           <h3>Request ready on WhatsApp</h3>
-          <p>Send the message and our engineer will confirm your visit. Your design is attached, so we arrive prepared.</p>
+          <p>We’ve received your request with your design. Send the WhatsApp message too and our engineer will confirm your visit.</p>
         </Done>
       ) : (
         <>
