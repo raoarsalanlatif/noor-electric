@@ -121,7 +121,7 @@ function Footer() {
           </div>
         </Cols>
         <Bottom>
-          <span>© {new Date().getFullYear()} {company.name}. All rights reserved.</span>
+          <span>© {new Date().getFullYear()} {company.legalName}. All rights reserved.</span>
           <span>Peshawar · Islamabad · Khyber Pakhtunkhwa · <Link to="/admin" style={{ opacity: 0.6 }}>Staff login</Link></span>
         </Bottom>
       </Container>

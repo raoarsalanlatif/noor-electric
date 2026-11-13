@@ -28,6 +28,17 @@ const Collage = styled.div`
   .badge span { font-size: 0.82rem; color: ${brand.orange}; font-weight: 600; }
 `;
 
+const Numbers = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 24px;
+  div { background: ${brand.bgSoft}; border-radius: 16px; padding: 14px 12px; text-align: center; }
+  b { display: block; font-family: ${fonts.heading}; font-size: clamp(1.3rem, 2.4vw, 1.7rem); color: ${brand.blue}; line-height: 1.1; }
+  span { font-size: 0.78rem; color: ${brand.muted}; }
+  @media (max-width: 520px) { grid-template-columns: 1fr 1fr; }
+`;
+
 const Pillars = styled.div`
   display: grid;
   gap: 14px;
@@ -57,11 +68,24 @@ function AboutSection() {
           </Reveal>
           <Reveal delay={0.1}>
             <Eyebrow>About us</Eyebrow>
-            <Heading>Your local solar partner in <span>Peshawar</span></Heading>
+            <Heading>Powering homes and businesses for <span>{company.yearsInBusiness} years</span></Heading>
             <Lead>
-              {company.name} designs and installs solar systems for homes and businesses across Khyber Pakhtunkhwa and Islamabad.
-              From a single-family rooftop to multi-inverter commercial setups, we focus on honest sizing, quality equipment and clean workmanship.
+              {company.legalName}, operating as {company.name}, is a Peshawar-based solar engineering company. For more than four years
+              we have designed, supplied and installed solar power systems across Khyber Pakhtunkhwa and Islamabad, completing
+              over {company.projectsCompleted.replace('+', '')} domestic and commercial projects.
             </Lead>
+            <p style={{ color: brand.muted, marginTop: 14 }}>
+              Our work covers the full project lifecycle: load assessment and site survey, system design, procurement of tier-1
+              panels, inverters and lithium batteries, professional installation, net-metering approval and long-term after-sales
+              support. Whether it is a 5 kW rooftop for a family home or a multi-inverter hybrid plant for a business, every system
+              is engineered around the customer’s real energy needs.
+            </p>
+            <Numbers>
+              <div><b>{company.projectsCompleted}</b><span>projects completed</span></div>
+              <div><b>{company.yearsInBusiness}</b><span>years in business</span></div>
+              <div><b>Homes</b><span>&amp; commercial sites</span></div>
+              <div><b>KP</b><span>&amp; Islamabad</span></div>
+            </Numbers>
             <Pillars>
               <div><i><FontAwesomeIcon icon={faBullseye} /></i><span><h3>Our mission</h3><p>Make reliable, cost-effective solar easy for every home and business.</p></span></div>
               <div><i><FontAwesomeIcon icon={faEye} /></i><span><h3>Our vision</h3><p>A brighter, greener Pakistan where families own their energy instead of renting it from the grid.</p></span></div>
