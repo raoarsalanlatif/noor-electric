@@ -1,92 +1,130 @@
-import styled from 'styled-components';
 import { Link } from 'react-router-dom';
+import styled from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faFacebook, faTwitter, faLinkedin, faInstagram } from '@fortawesome/free-brands-svg-icons';
-import { colors } from '../../styles/variables';
+import { faFacebookF, faInstagram, faLinkedinIn, faTiktok, faWhatsapp } from '@fortawesome/free-brands-svg-icons';
+import { faLocationDot, faPhone } from '@fortawesome/free-solid-svg-icons';
+import { brand, fonts } from '../../styles/variables';
+import { company, img, whatsappLink } from '../../content/company';
+import { Container } from '../ui/primitives';
 
-const FooterContainer = styled.footer`
-  background: ${colors.dark};
-  color: ${colors.light};
-  padding: 40px 6% 20px;
+const Wrap = styled.footer`
+  background: ${brand.ink};
+  color: rgba(255,255,255,0.72);
+  padding: 72px 0 0;
+  position: relative;
+  &::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 4px;
+    background: linear-gradient(90deg, ${brand.gold}, ${brand.orange}, ${brand.red}, ${brand.sky}, ${brand.blue}); }
 `;
 
-const FooterContent = styled.div`
+const Cols = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  grid-template-columns: 1.4fr 1fr 1fr 1.3fr;
   gap: 40px;
-  margin-bottom: 40px;
+  @media (max-width: 900px) { grid-template-columns: 1fr 1fr; }
+  @media (max-width: 560px) { grid-template-columns: 1fr; }
+  h4 { color: #fff; font-size: 1rem; margin-bottom: 16px; font-family: ${fonts.heading}; }
+  ul { list-style: none; display: grid; gap: 10px; }
+  a { text-decoration: none; transition: color 0.2s; }
+  a:hover { color: ${brand.gold}; }
 `;
 
-const FooterSection = styled.div`
-  h3 {
-    color: ${colors.primaryOrange};
-    margin-bottom: 20px;
-  }
-
-  ul {
-    list-style: none;
-  }
-
-  li {
-    margin: 10px 0;
-  }
-
-  a {
-    color: ${colors.light};
-    text-decoration: none;
-    &:hover {
-      color: ${colors.primaryOrange};
-    }
-  }
+const BrandBlock = styled.div`
+  .row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .row img { width: 52px; height: 52px; }
+  strong { color: #fff; font-family: ${fonts.heading}; font-size: 1.15rem; display: block; }
+  em { color: ${brand.gold}; font-style: normal; font-size: 0.85rem; }
+  p { font-size: 0.93rem; max-width: 340px; }
 `;
 
-const SocialLinks = styled.div`
-  a {
-    margin-right: 15px;
-    font-size: 20px;
-  }
+const Socials = styled.div`
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+  a { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; background: rgba(255,255,255,0.08); color: #fff; }
+  a:hover { background: ${brand.gold}; color: ${brand.ink}; }
 `;
 
-const FooterBottom = styled.div`
-  text-align: center;
-  padding-top: 20px;
-  border-top: 1px solid rgba(255,255,255,0.1);
+const ContactItem = styled.li`
+  display: flex;
+  gap: 12px;
+  font-size: 0.93rem;
+  svg { color: ${brand.gold}; margin-top: 4px; width: 14px; }
 `;
+
+const Bottom = styled.div`
+  border-top: 1px solid rgba(255,255,255,0.08);
+  margin-top: 56px;
+  padding: 22px 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+`;
+
+export const SOCIALS = [
+  { href: company.socials.facebook, icon: faFacebookF, label: 'Facebook' },
+  { href: company.socials.instagram, icon: faInstagram, label: 'Instagram' },
+  { href: company.socials.linkedin, icon: faLinkedinIn, label: 'LinkedIn' },
+  { href: company.socials.tiktok, icon: faTiktok, label: 'TikTok' },
+];
 
 function Footer() {
   return (
-    <FooterContainer>
-      <FooterContent>
-        <FooterSection>
-          <h3>Noor Electric Renewables</h3>
-          <p>Sustainable energy solutions for a brighter future.</p>
-        </FooterSection>
-        
-        <FooterSection>
-          <h3>Quick Links</h3>
-          <ul>
-            <li><Link to="/">Home</Link></li>
-            <li><Link to="/services">Services</Link></li>
-            <li><Link to="/projects">Projects</Link></li>
-            <li><Link to="/contact">Contact</Link></li>
-          </ul>
-        </FooterSection>
+    <Wrap>
+      <Container>
+        <Cols>
+          <BrandBlock>
+            <div className="row">
+              <img src={img('logo-192.png')} alt="" width="52" height="52" loading="lazy" />
+              <div><strong>{company.name}</strong><em>{company.tagline}</em></div>
+            </div>
+            <p>{company.bio}</p>
+            <Socials>
+              {SOCIALS.map((s) => (
+                <a key={s.label} href={s.href} target="_blank" rel="noopener noreferrer" aria-label={s.label}><FontAwesomeIcon icon={s.icon} /></a>
+              ))}
+            </Socials>
+          </BrandBlock>
 
-        <FooterSection>
-          <h3>Follow Us</h3>
-          <SocialLinks>
-            <a href="#"><FontAwesomeIcon icon={faFacebook} /></a>
-            <a href="#"><FontAwesomeIcon icon={faTwitter} /></a>
-            <a href="#"><FontAwesomeIcon icon={faLinkedin} /></a>
-            <a href="#"><FontAwesomeIcon icon={faInstagram} /></a>
-          </SocialLinks>
-        </FooterSection>
-      </FooterContent>
-      
-      <FooterBottom>
-        <p>&copy; 2024 Noor Electric Renewables. All rights reserved.</p>
-      </FooterBottom>
-    </FooterContainer>
+          <div>
+            <h4>Company</h4>
+            <ul>
+              <li><Link to="/about">About us</Link></li>
+              <li><Link to="/projects">Projects</Link></li>
+              <li><Link to="/services">Services</Link></li>
+              <li><Link to="/contact">Contact</Link></li>
+            </ul>
+          </div>
+
+          <div>
+            <h4>Solutions</h4>
+            <ul>
+              <li><Link to="/services">Residential solar</Link></li>
+              <li><Link to="/services">Commercial solar</Link></li>
+              <li><Link to="/services">Hybrid &amp; battery backup</Link></li>
+              <li><Link to="/services">Net-metering</Link></li>
+              <li><Link to="/planner">Solar Planner</Link></li>
+            </ul>
+          </div>
+
+          <div>
+            <h4>Get in touch</h4>
+            <ul>
+              <ContactItem><FontAwesomeIcon icon={faLocationDot} /><span>{company.address.line1},<br />{company.address.line2},<br />{company.address.city}</span></ContactItem>
+              {company.phones.map((p) => (
+                <ContactItem key={p.tel}><FontAwesomeIcon icon={faPhone} /><a href={`tel:${p.tel}`}>{p.display}</a></ContactItem>
+              ))}
+              <ContactItem><FontAwesomeIcon icon={faWhatsapp} /><a href={whatsappLink()} target="_blank" rel="noopener noreferrer">Chat on WhatsApp</a></ContactItem>
+            </ul>
+          </div>
+        </Cols>
+        <Bottom>
+          <span>© {new Date().getFullYear()} {company.name}. All rights reserved.</span>
+          <span>Peshawar · Islamabad · Khyber Pakhtunkhwa</span>
+        </Bottom>
+      </Container>
+    </Wrap>
   );
 }
 

@@ -1,116 +1,98 @@
 import { useState } from 'react';
 import styled from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faPlus, faMinus } from '@fortawesome/free-solid-svg-icons';
-import { colors } from '../../styles/variables';
+import { faPlus } from '@fortawesome/free-solid-svg-icons';
+import { brand, fonts } from '../../styles/variables';
+import { Section, Container, Eyebrow, Heading, Lead, SectionHead } from '../ui/primitives';
 
-const FAQContainer = styled.section`
-  padding: 80px 6%;
-  background: ${colors.grey};
-`;
-
-const SectionTitle = styled.h2`
-  color: ${colors.primaryBlue};
-  margin-bottom: 40px;
-  font-size: 2.5rem;
-  text-align: center;
-`;
-
-const FAQWrapper = styled.div`
-  max-width: 800px;
-  margin: 0 auto;
-`;
-
-const FAQItem = styled.div`
-  margin-bottom: 15px;
-  border-radius: 8px;
-  overflow: hidden;
-  background: ${colors.light};
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-`;
-
-const Question = styled.button`
-  width: 100%;
-  padding: 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: ${colors.light};
-  border: none;
-  cursor: pointer;
-  font-size: 1.1rem;
-  text-align: left;
-  color: ${colors.dark};
-  transition: 0.3s;
-
-  &:hover {
-    background: ${colors.grey};
-  }
-
-  .icon {
-    color: ${colors.primaryOrange};
-  }
-`;
-
-const Answer = styled.div`
-  padding: ${props => props.isOpen ? '20px' : '0 20px'};
-  max-height: ${props => props.isOpen ? '500px' : '0'};
-  overflow: hidden;
-  transition: all 0.3s ease-in-out;
-  border-top: ${props => props.isOpen ? `1px solid ${colors.grey}` : 'none'};
-`;
-
-const faqs = [
+const FAQS = [
   {
-    question: "How much can I save with solar panels?",
-    answer: "Savings vary based on energy consumption, location, and system size. On average, homeowners can save 20-30% on their electricity bills. We provide detailed savings calculations during consultation."
+    q: 'What size solar system do I need?',
+    a: 'It depends on what you run and for how long — mainly ACs, motors and geysers. Try our Solar Planner for an instant estimate, then we confirm the exact size during the free site survey.',
   },
   {
-    question: "How long does installation take?",
-    answer: "A typical residential installation takes 1-3 days, while commercial projects may take 1-2 weeks. The exact timeline depends on system size and complexity."
+    q: 'What is the difference between on-grid and hybrid?',
+    a: 'An on-grid system works with WAPDA and net-metering to cut your bill, but switches off during load-shedding. A hybrid system adds batteries so your home keeps running when the grid is down.',
   },
   {
-    question: "What maintenance is required?",
-    answer: "Solar panels require minimal maintenance. We recommend annual inspections and cleaning to ensure optimal performance. Our maintenance packages provide comprehensive care."
+    q: 'Do you handle net-metering and the green meter?',
+    a: 'Yes. We prepare the documents and coordinate the net-metering application with your distribution company, so surplus solar units can be credited against your bill.',
   },
   {
-    question: "Are there government incentives available?",
-    answer: "Yes, various federal, state, and local incentives are available. These can include tax credits, rebates, and grants. Our team will help you identify all applicable incentives."
+    q: 'Which brands do you install?',
+    a: 'We work with established brands such as Trina Solar panels, Solis and Inverex inverters, and lithium batteries from Zilo, Dongjin and Narada. We recommend the best fit for your budget and load.',
   },
   {
-    question: "What happens during power outages?",
-    answer: "Standard grid-tied systems will shut off during outages for safety. However, systems with battery backup can continue providing power to essential appliances."
-  }
+    q: 'How long does installation take?',
+    a: 'Most homes are installed within a few days once equipment is on site. Larger commercial systems take longer — we give you a timeline with your quote.',
+  },
+  {
+    q: 'Is there a warranty?',
+    a: 'Panels, inverters and batteries carry their manufacturers’ warranties, and we stand behind our installation workmanship. Ask us for the exact terms for the equipment in your quote.',
+  },
 ];
 
+const List = styled.div`
+  max-width: 860px;
+  margin: 0 auto;
+  display: grid;
+  gap: 12px;
+`;
+
+const Item = styled.div`
+  border: 1px solid ${(p) => (p.$open ? `${brand.blue}55` : brand.line)};
+  border-radius: 18px;
+  background: #fff;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-shadow: ${(p) => (p.$open ? '0 16px 36px rgba(10,31,77,0.08)' : 'none')};
+  button {
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: 0;
+    padding: 20px 22px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    cursor: pointer;
+    font-family: ${fonts.heading};
+    font-weight: 600;
+    font-size: 1.05rem;
+    color: ${brand.ink};
+  }
+  .icon { flex-shrink: 0; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
+    background: ${(p) => (p.$open ? brand.gold : brand.bgSoft)}; color: ${brand.navy};
+    transform: rotate(${(p) => (p.$open ? '45deg' : '0')}); transition: transform 0.25s, background 0.25s; }
+  .answer { display: grid; grid-template-rows: ${(p) => (p.$open ? '1fr' : '0fr')}; transition: grid-template-rows 0.3s ease; }
+  .answer > div { overflow: hidden; }
+  .answer p { padding: 0 22px 22px; color: ${brand.muted}; }
+`;
+
 function FAQSection() {
-  const [openIndex, setOpenIndex] = useState(null);
-
-  const toggleFAQ = (index) => {
-    setOpenIndex(openIndex === index ? null : index);
-  };
-
+  const [open, setOpen] = useState(0);
   return (
-    <FAQContainer id="faq">
-      <SectionTitle>Frequently Asked Questions</SectionTitle>
-      <FAQWrapper>
-        {faqs.map((faq, index) => (
-          <FAQItem key={index}>
-            <Question onClick={() => toggleFAQ(index)}>
-              {faq.question}
-              <FontAwesomeIcon 
-                icon={openIndex === index ? faMinus : faPlus} 
-                className="icon"
-              />
-            </Question>
-            <Answer isOpen={openIndex === index}>
-              {faq.answer}
-            </Answer>
-          </FAQItem>
-        ))}
-      </FAQWrapper>
-    </FAQContainer>
+    <Section id="faq">
+      <Container>
+        <SectionHead $center>
+          <Eyebrow>FAQ</Eyebrow>
+          <Heading>Questions we <span>hear every day</span></Heading>
+          <Lead>Still unsure? Message us on WhatsApp — an engineer will answer.</Lead>
+        </SectionHead>
+        <List>
+          {FAQS.map((f, i) => (
+            <Item key={f.q} $open={open === i}>
+              <button type="button" aria-expanded={open === i} onClick={() => setOpen(open === i ? -1 : i)}>
+                {f.q}
+                <span className="icon"><FontAwesomeIcon icon={faPlus} /></span>
+              </button>
+              <div className="answer"><div><p>{f.a}</p></div></div>
+            </Item>
+          ))}
+        </List>
+      </Container>
+    </Section>
   );
 }
 
-export default FAQSection; 
+export default FAQSection;

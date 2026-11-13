@@ -1,46 +1,39 @@
-import styled from 'styled-components';
+import styled, { keyframes } from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faWhatsapp } from '@fortawesome/free-brands-svg-icons';
-import { colors } from '../../styles/variables';
+import { whatsappLink } from '../../content/company';
 
-const WhatsAppLink = styled.a`
+const ring = keyframes`
+  0% { box-shadow: 0 0 0 0 rgba(37,211,102,0.55); }
+  70% { box-shadow: 0 0 0 16px rgba(37,211,102,0); }
+  100% { box-shadow: 0 0 0 0 rgba(37,211,102,0); }
+`;
+
+const Fab = styled.a`
   position: fixed;
-  bottom: 20px;
-  left: 20px;
-  background: #25D366;
-  color: ${colors.light};
-  width: 50px;
-  height: 50px;
+  bottom: 22px;
+  right: 22px;
+  width: 58px;
+  height: 58px;
   border-radius: 50%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  background: #25d366;
+  color: #fff;
+  display: grid;
+  place-items: center;
   font-size: 30px;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-  transition: 0.3s;
   z-index: 999;
-
-  &:hover {
-    transform: scale(1.1);
-    box-shadow: 0 6px 15px rgba(0,0,0,0.3);
-  }
+  animation: ${ring} 2.4s infinite;
+  transition: transform 0.2s;
+  &:hover { transform: scale(1.08); }
+  @media (max-width: 600px) { bottom: 16px; right: 16px; width: 52px; height: 52px; font-size: 27px; }
 `;
 
 function WhatsAppButton() {
-  // Replace with your WhatsApp number
-  const whatsappNumber = '+1234567890';
-  const message = 'Hello! I would like to know more about your solar solutions.';
-
   return (
-    <WhatsAppLink 
-      href={`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label="Contact us on WhatsApp"
-    >
+    <Fab href={whatsappLink()} target="_blank" rel="noopener noreferrer" aria-label="Chat with us on WhatsApp">
       <FontAwesomeIcon icon={faWhatsapp} />
-    </WhatsAppLink>
+    </Fab>
   );
 }
 
-export default WhatsAppButton; 
+export default WhatsAppButton;
