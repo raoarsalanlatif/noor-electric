@@ -4,6 +4,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { Sky, Stars } from '@react-three/drei';
 import * as THREE from 'three';
 import { sunPosition, daylightFromAlt } from './sun';
+import BrandSign from './BrandSign';
 import { grassTexture, roadTexture, plasterTexture, brickTexture } from './textures';
 
 const FOG_DAY = new THREE.Color('#cfe2f3');
@@ -132,6 +133,7 @@ function NeighbourHouse({ position, size, windowsRef, idx }) {
         <boxGeometry args={[size[0] + 0.2, 0.5, size[2] + 0.2]} />
         <meshStandardMaterial color="#d6cbb8" />
       </mesh>
+      <BrandSign position={[0, size[1] * 0.49, size[2] / 2 + 0.06]} width={Math.min(5.5, size[0] * 0.62)} />
       {[0.3, 0.68].map((h, i) => (
         <mesh key={i} position={[0, size[1] * h, size[2] / 2 + 0.01]}>
           <planeGeometry args={[size[0] * 0.6, 1.1]} />

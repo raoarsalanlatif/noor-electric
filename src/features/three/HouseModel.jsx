@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Edges } from '@react-three/drei';
 import { STOREY_H, SLAB } from './constants';
+import BrandSign from './BrandSign';
 import { plasterTexture, concreteTexture, tankTexture, acGrillTexture } from './textures';
 
 
@@ -96,6 +97,9 @@ export default function HouseModel({ roof, site, obstacles = [], failing = false
         <boxGeometry args={[W + 0.1, 0.5, L + 0.1]} />
         <meshStandardMaterial color="#8f877b" roughness={1} />
       </mesh>
+      {/* Powered by Noor Electric fascia sign along the roof edge */}
+      <BrandSign position={[0, H + 0.06, L / 2 + 0.24]} width={Math.min(6, W * 0.7)} />
+
       {/* door and porch */}
       <mesh position={[doorX, 1.25, L / 2 + 0.02]}>
         <planeGeometry args={[1.3, 2.5]} />
