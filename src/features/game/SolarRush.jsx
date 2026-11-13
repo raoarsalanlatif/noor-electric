@@ -267,7 +267,7 @@ export default function SolarRush() {
               <button type="button" className="d" aria-label="Down" {...hold('down')}><FontAwesomeIcon icon={faArrowDown} /></button>
               <button type="button" className="r" aria-label="Right" {...hold('right')}><FontAwesomeIcon icon={faArrowRight} /></button>
             </DPad>
-            <Hint>Move: arrows / WASD / mouse · Clean: Space</Hint>
+            <Hint>Stand on the gold circles · Move: arrows / WASD / mouse · Clean: Space</Hint>
             <div style={{ display: 'flex', gap: 8 }}>
               <RoundBtn type="button" onClick={toggleMute} aria-label={muted ? 'Unmute' : 'Mute'}><FontAwesomeIcon icon={muted ? faVolumeXmark : faVolumeHigh} /></RoundBtn>
               <RoundBtn type="button" $hot={hud.dirt > 0.2} onClick={() => { keys.current.clean = true; }}>
@@ -291,6 +291,9 @@ export default function SolarRush() {
               <li><i style={{ background: '#f8717133', color: C.red }}><FontAwesomeIcon icon={faCloudBolt} /></i>Dodge lightning under storms</li>
               <li><i style={{ background: '#a5b4fc33', color: '#a5b4fc' }}><FontAwesomeIcon icon={faMoon} /></i>No sun at night — plan ahead</li>
             </Legend>
+            <p style={{ color: '#ffd23f', fontWeight: 600, fontSize: '0.92rem', margin: '-6px 0 18px' }}>
+              Tip: a glowing circle on the roof shows where each item will land — stand on it. Your ring turns gold when you’re in the right spot.
+            </p>
             <Big type="button" onClick={start}><FontAwesomeIcon icon={faPlay} /> Play</Big>
             <p style={{ color: C.muted, fontSize: '0.8rem', marginTop: 14 }}>
               Arrows / WASD or mouse to move · Space to clean · On phones, drag on the roof

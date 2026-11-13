@@ -51,6 +51,41 @@ function ItemMeshes({ game, refs }) {
   ));
 }
 
+/* ------------------- landing markers + player catch ring ------------------ */
+const MARK_COLORS = { sun: '#ffd23f', big: '#ffb300', dust: '#b07a45', battery: '#4ade80', water: '#4fb3ff' };
+
+/** A glowing target on the roof under every falling item, plus a light beam up to it. */
+function ItemMarkers({ game, refs }) {
+  return game.current.items.map((it, i) => {
+    const color = MARK_COLORS[it.type];
+    return (
+      <group key={i} ref={(r) => { refs.current[i] = r; }} visible={false}>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} renderOrder={2}>
+          <ringGeometry args={[0.55, 0.75, 40]} />
+          <meshBasicMaterial color={color} transparent opacity={0.6} depthWrite={false} />
+        </mesh>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, 0]} renderOrder={2}>
+          <circleGeometry args={[0.22, 24]} />
+          <meshBasicMaterial color={color} transparent opacity={0.8} depthWrite={false} />
+        </mesh>
+        <mesh renderOrder={1}>
+          <cylinderGeometry args={[0.05, 0.05, 1, 8, 1, true]} />
+          <meshBasicMaterial color={color} transparent opacity={0.28} depthWrite={false} blending={THREE.AdditiveBlending} />
+        </mesh>
+      </group>
+    );
+  });
+}
+
+function CatchRing({ ringRef }) {
+  return (
+    <mesh ref={ringRef} rotation={[-Math.PI / 2, 0, 0]} renderOrder={3}>
+      <ringGeometry args={[0.95, 1.12, 48]} />
+      <meshBasicMaterial color="#ffffff" transparent opacity={0.45} depthWrite={false} />
+    </mesh>
+  );
+}
+
 /* ------------------------------- particles -------------------------------- */
 function Bursts({ burstRef }) {
   const N = 6; const P = 12;
@@ -147,7 +182,7 @@ function Weather({ game }) {
 }
 
 /* --------------------------------- engine --------------------------------- */
-function Engine({ game, keys, clock, onHud, onEvent, onOver, itemRefs, burst, workerRef, workerAnim, panelCells, litRef }) {
+function Engine({ game, keys, clock, onHud, onEvent, onOver, itemRefs, markerRefs, catchRing, burst, workerRef, workerAnim, panelCells, litRef }) {
   const hudT = useRef(0);
   const { camera, size } = useThree();
   const look = useMemo(() => new THREE.Vector3(), []);
@@ -158,11 +193,12 @@ function Engine({ game, keys, clock, onHud, onEvent, onOver, itemRefs, burst, wo
     const portrait = size.width < size.height;
 
     // camera follows lightly
+    // a steep, almost top-down view makes it easy to see where things will land
     const camTarget = portrait
-      ? new THREE.Vector3(g.px * 0.25, ROOF_TOP + 19, ROOF.length / 2 + 15)
-      : new THREE.Vector3(g.px * 0.35, ROOF_TOP + 12.5, ROOF.length / 2 + 12);
+      ? new THREE.Vector3(g.px * 0.2, ROOF_TOP + 23, ROOF.length / 2 + 9.5)
+      : new THREE.Vector3(g.px * 0.3, ROOF_TOP + 16.5, ROOF.length / 2 + 8.5);
     camera.position.lerp(camTarget, 0.06);
-    look.set(g.px * 0.3, ROOF_TOP + 0.6, -0.6);
+    look.set(g.px * 0.3, ROOF_TOP, -0.4);
     camera.lookAt(look);
     if (camera.fov !== (portrait ? 58 : 46)) { camera.fov = portrait ? 58 : 46; camera.updateProjectionMatrix(); }
 
@@ -172,6 +208,8 @@ function Engine({ game, keys, clock, onHud, onEvent, onOver, itemRefs, burst, wo
       workerAnim.current.moving = false;
       litRef.current = g.status === 'over' ? 0 : 1.2;
       itemRefs.current.forEach((r) => { if (r) r.visible = false; });
+      markerRefs.current.forEach((r) => { if (r) r.visible = false; });
+      if (catchRing.current) catchRing.current.visible = g.status === 'playing';
       if (workerRef.current) workerRef.current.position.set(g.px, ROOF_TOP, g.pz);
       return;
     }
@@ -236,7 +274,7 @@ function Engine({ game, keys, clock, onHud, onEvent, onOver, itemRefs, burst, wo
       if (!it) return;
       it.active = true; it.x = x ?? rand(-BOUND, BOUND); it.z = z ?? rand(-BOUND, BOUND);
       it.y = ROOF_TOP + 13 + rand(0, 3);
-      const fall = 4.6 + g.day * 0.55;
+      const fall = 4.2 + g.day * 0.5;
       it.vy = type === 'sun' ? fall * 0.85 : type === 'big' ? fall * 0.7 : type === 'dust' ? fall * 1.1 : fall * 0.8;
       it.phase = rand(0, 6);
     };
@@ -288,16 +326,31 @@ function Engine({ game, keys, clock, onHud, onEvent, onOver, itemRefs, burst, wo
     /* ---- items ---- */
     const shadeAt = (x, z) => g.clouds.some((c) => c.active && Math.hypot(c.x - x, c.z - z) < 2.3);
     const eff = 1 - g.dirt * 0.7;
+    let sunInReach = false;
     g.items.forEach((it, i) => {
       const r = itemRefs.current[i];
-      if (!it.active) { if (r) r.visible = false; return; }
+      const mk = markerRefs.current[i];
+      if (!it.active) { if (r) r.visible = false; if (mk) mk.visible = false; return; }
       it.y -= it.vy * dt;
       it.phase += dt * 3;
       if (r) {
         r.visible = true;
-        r.position.set(it.x + (it.type === 'sun' ? Math.sin(it.phase) * 0.12 : 0), it.y, it.z);
+        r.position.set(it.x, it.y, it.z);
         r.rotation.y += dt * 2; r.rotation.x += dt * (it.type === 'dust' ? 3 : 0.5);
       }
+      if (mk) {
+        const h = Math.max(0, it.y - ROOF_TOP);
+        const k = Math.min(1, h / 14); // 1 = just spawned, 0 = about to land
+        mk.visible = true;
+        mk.position.set(it.x, ROOF_TOP + 0.04, it.z);
+        const [ring, dot, beam] = mk.children;
+        ring.scale.setScalar(0.55 + k * 1.1); // shrinks onto the spot as it falls
+        ring.material.opacity = 0.35 + (1 - k) * 0.55;
+        dot.material.opacity = 0.4 + (1 - k) * 0.5;
+        beam.scale.set(1, Math.max(0.01, h), 1);
+        beam.position.y = h / 2;
+      }
+      if ((it.type === 'sun' || it.type === 'big') && it.y < ROOF_TOP + 9 && Math.hypot(it.x - g.px, it.z - g.pz) < (it.type === 'big' ? 1.35 : 1.05)) sunInReach = true;
       const reach = it.type === 'big' ? 1.35 : 1.05;
       if (it.y < CATCH_Y1 && it.y > CATCH_Y0 && g.cleaning <= 0 && Math.hypot(it.x - g.px, it.z - g.pz) < reach) {
         it.active = false;
@@ -326,6 +379,14 @@ function Engine({ game, keys, clock, onHud, onEvent, onOver, itemRefs, burst, wo
       }
       if (it.y < ROOF_TOP + 0.1) it.active = false;
     });
+
+    if (catchRing.current) {
+      const cr = catchRing.current;
+      cr.visible = true;
+      cr.position.set(g.px, ROOF_TOP + 0.05, g.pz);
+      cr.material.color.set(sunInReach ? '#ffd23f' : '#ffffff');
+      cr.material.opacity = sunInReach ? 0.75 + Math.sin(g.t * 20) * 0.2 : 0.4;
+    }
 
     g.energy = Math.min(g.cap, g.energy);
     g.flash = Math.max(0, g.flash - dt * 4);
@@ -370,6 +431,8 @@ function TouchPlane({ game }) {
 function SceneContent(props) {
   const { game } = props;
   const itemRefs = useRef([]);
+  const markerRefs = useRef([]);
+  const catchRing = useRef();
   const burst = useRef(null);
   const workerRef = useRef();
   const workerAnim = useRef({ mode: 'carry', moving: false, speed: 1 });
@@ -388,10 +451,12 @@ function SceneContent(props) {
       <HouseModel roof={ROOF} site={SITE} obstacles={[]} litRef={litRef} />
       <Worker ref={workerRef} anim={workerAnim} carryPanel={carry} scale={PLAYER_SCALE} />
       <ItemMeshes game={game} refs={itemRefs} />
+      <ItemMarkers game={game} refs={markerRefs} />
+      <CatchRing ringRef={catchRing} />
       <Weather game={game} />
       <Bursts burstRef={burst} />
       <TouchPlane game={game} />
-      <Engine {...props} itemRefs={itemRefs} burst={burst} workerRef={workerRef} workerAnim={workerAnim} panelCells={panelCells} litRef={litRef} />
+      <Engine {...props} itemRefs={itemRefs} markerRefs={markerRefs} catchRing={catchRing} burst={burst} workerRef={workerRef} workerAnim={workerAnim} panelCells={panelCells} litRef={litRef} />
     </>
   );
 }
