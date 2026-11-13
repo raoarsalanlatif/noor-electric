@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import styled from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faBars, faXmark, faPhone } from '@fortawesome/free-solid-svg-icons';
+import { faBars, faXmark, faPhone, faGamepad } from '@fortawesome/free-solid-svg-icons';
 import { brand, fonts } from '../../styles/variables';
 import { company, img } from '../../content/company';
 import { ButtonLink } from '../ui/primitives';
@@ -54,10 +54,13 @@ const Links = styled.nav`
     padding: 8px 12px;
     border-radius: 8px;
     transition: color 0.2s, background 0.2s;
+    white-space: nowrap;
   }
   a.link:hover { color: ${brand.blue}; background: ${brand.bgSoft}; }
   a.link.active { color: ${brand.blue}; }
   a.planner { color: ${brand.orange}; }
+  a.play { color: #fff; background: linear-gradient(135deg, ${brand.blue}, ${brand.blueBright}); margin-left: 4px; }
+  a.play:hover, a.play.active { color: #fff; background: ${brand.navy}; }
 
   @media (max-width: 1024px) {
     position: fixed;
@@ -84,7 +87,7 @@ const Actions = styled.div`
   gap: 10px;
   .phone { display: flex; align-items: center; gap: 8px; color: ${brand.navy}; font-weight: 700; text-decoration: none; font-size: 0.92rem; }
   .phone svg { color: ${brand.blue}; }
-  @media (max-width: 1180px) { .phone { display: none; } }
+  @media (max-width: 1360px) { .phone { display: none; } }
   @media (max-width: 1024px) { .cta { display: none; } }
 `;
 
@@ -140,6 +143,7 @@ function Navbar() {
             <NavLink key={n.to} to={n.to} end={n.end} className="link">{n.label}</NavLink>
           ))}
           <NavLink to="/planner" className="link planner">Solar Planner</NavLink>
+          <NavLink to="/play" className="link play"><FontAwesomeIcon icon={faGamepad} /> Play</NavLink>
           <MobileCta>
             <ButtonLink to="/contact">Free site survey</ButtonLink>
           </MobileCta>
