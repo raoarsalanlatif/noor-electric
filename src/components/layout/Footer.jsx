@@ -93,6 +93,7 @@ function Footer() {
               <li><Link to="/about">About us</Link></li>
               <li><Link to="/projects">Projects</Link></li>
               <li><Link to="/services">Services</Link></li>
+              <li><Link to="/blog">Blog</Link></li>
               <li><Link to="/contact">Contact</Link></li>
             </ul>
           </div>
@@ -121,7 +122,7 @@ function Footer() {
         </Cols>
         <Bottom>
           <span>© {new Date().getFullYear()} {company.name}. All rights reserved.</span>
-          <span>Peshawar · Islamabad · Khyber Pakhtunkhwa</span>
+          <span>Peshawar · Islamabad · Khyber Pakhtunkhwa · <Link to="/admin" style={{ opacity: 0.6 }}>Staff login</Link></span>
         </Bottom>
       </Container>
     </Wrap>
