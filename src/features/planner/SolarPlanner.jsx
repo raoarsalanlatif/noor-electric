@@ -1,0 +1,293 @@
+import { Suspense, lazy, useCallback, useMemo, useRef, useState } from 'react';
+import styled, { keyframes } from 'styled-components';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import {
+  faPlay, faPause, faTriangleExclamation, faCircleCheck, faCircleXmark, faWandMagicSparkles, faSun, faMoon,
+} from '@fortawesome/free-solid-svg-icons';
+import InputsPanel from './InputsPanel';
+import Analytics from './Analytics';
+import BookingCard from './BookingCard';
+import { computePlan } from './sizing';
+import { DEFAULT_LOAD } from './appliances';
+import { Card, CardTitle, Button, Range, t, statusColor } from './ui';
+
+const RoofScene = lazy(() => import('./RoofScene'));
+
+const Page = styled.div`
+  background: radial-gradient(1200px 500px at 70% -10%, #1d2b4a 0%, ${t.bg} 60%);
+  color: ${t.text};
+  min-height: 100vh;
+  padding: 28px 4% 60px;
+  font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  @media (max-width: 600px) { padding: 20px 16px 48px; }
+`;
+
+const Hero = styled.header`
+  max-width: 1400px;
+  margin: 0 auto 22px;
+  h1 { font-size: clamp(1.7rem, 3.4vw, 2.6rem); margin: 0 0 6px; letter-spacing: -0.02em; }
+  h1 span { background: linear-gradient(90deg, ${t.orange}, #ffd36b); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  p { color: ${t.muted}; margin: 0; max-width: 680px; }
+`;
+
+const Layout = styled.div`
+  max-width: 1400px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 380px minmax(0, 1fr);
+  grid-template-areas: 'side scene' 'side rest';
+  gap: 18px;
+  align-items: start;
+  @media (max-width: 1024px) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'scene' 'side' 'rest';
+  }
+`;
+
+const Side = styled.aside`
+  grid-area: side;
+  position: sticky;
+  top: 96px;
+  @media (max-width: 1024px) { position: static; }
+`;
+
+const Main = styled.div`
+  grid-area: rest;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+`;
+
+const SceneWrap = styled.div`
+  grid-area: scene;
+  position: relative;
+  height: clamp(340px, 52vh, 560px);
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid ${(p) => (p.$status === 'fail' ? `${t.red}aa` : t.line)};
+  box-shadow: ${(p) => (p.$status === 'fail' ? `0 0 0 4px ${t.red}22, 0 20px 60px ${t.red}22` : '0 20px 60px rgba(0,0,0,0.35)')};
+  transition: border-color 0.3s, box-shadow 0.3s;
+  background: #0b1220;
+`;
+
+const pulse = keyframes`
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+`;
+
+const Banner = styled.div`
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  right: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  pointer-events: none;
+  .status {
+    pointer-events: auto;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 14px; border-radius: 12px;
+    background: ${(p) => `${statusColor[p.$status]}22`};
+    border: 1px solid ${(p) => statusColor[p.$status]};
+    color: #fff;
+    backdrop-filter: blur(8px);
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    animation: ${(p) => (p.$status === 'fail' ? pulse : 'none')} 1.2s ease-in-out infinite;
+    svg { color: ${(p) => statusColor[p.$status]}; }
+  }
+  .live {
+    background: rgba(10,15,26,0.7); backdrop-filter: blur(8px);
+    border: 1px solid ${t.line}; border-radius: 12px; padding: 8px 12px; font-size: 0.8rem; color: ${t.muted};
+    text-align: right;
+    b { color: ${t.text}; }
+  }
+  @media (max-width: 600px) { .live { display: none; } }
+`;
+
+const TimeBar = styled.div`
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: rgba(10,15,26,0.75);
+  backdrop-filter: blur(8px);
+  border: 1px solid ${t.line};
+  border-radius: 12px;
+  button { width: 34px; height: 34px; border-radius: 9px; border: 0; background: ${t.orange}; color: #111; cursor: pointer; flex-shrink: 0; }
+  .clock { min-width: 74px; font-variant-numeric: tabular-nums; font-weight: 700; display: flex; gap: 6px; align-items: center; }
+`;
+
+const Loading = styled.div`
+  height: 100%; display: grid; place-items: center; color: ${t.muted};
+`;
+
+const Diagnosis = styled(Card)`
+  border-color: ${(p) => `${statusColor[p.$status]}66`};
+  ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  li { display: flex; gap: 10px; align-items: flex-start; }
+  li svg { margin-top: 3px; }
+  li b { display: block; color: ${t.text}; }
+  li span { color: ${t.muted}; font-size: 0.88rem; }
+`;
+
+const Fixes = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+`;
+
+const Fix = styled.div`
+  background: ${t.cardHi};
+  border: 1px solid ${t.line};
+  border-radius: 12px;
+  padding: 12px;
+  b { display: block; color: ${t.text}; margin-bottom: 4px; }
+  p { font-size: 0.85rem; color: ${t.muted}; margin: 0 0 8px; }
+  button { padding: 7px 12px; font-size: 0.8rem; border-radius: 9px; }
+`;
+
+const fmtHour = (h) => `${((h + 11) % 12) + 1}:00 ${h < 12 ? 'AM' : 'PM'}`;
+const statusText = {
+  ok: 'Doable — this system works',
+  warn: 'Works, with gaps',
+  fail: 'Not doable as designed',
+};
+const statusIcon = { ok: faCircleCheck, warn: faTriangleExclamation, fail: faCircleXmark };
+
+export default function SolarPlanner() {
+  const [load, setLoad] = useState(DEFAULT_LOAD);
+  const [cityId, setCityId] = useState('lahore');
+  const [roof, setRoof] = useState({ width: 9, length: 12 });
+  const [panelWatts, setPanelWatts] = useState(550);
+  const [mode, setMode] = useState('auto');
+  const [custom, setCustom] = useState({ panels: 12, inverterKW: 6, batteryKWh: 10 });
+  const [withBattery, setWithBattery] = useState(false);
+  const [offGrid, setOffGrid] = useState(false);
+
+  const clock = useRef({ hour: 11, playing: true });
+  const [hour, setHour] = useState(11);
+  const [playing, setPlaying] = useState(true);
+  const onHour = useCallback((h) => setHour(h), []);
+
+  const plan = useMemo(
+    () => computePlan({ load, cityId, roof, panelWatts, mode, custom, withBattery, offGrid }),
+    [load, cityId, roof, panelWatts, mode, custom, withBattery, offGrid],
+  );
+
+  const togglePlay = () => {
+    clock.current.playing = !clock.current.playing;
+    setPlaying(clock.current.playing);
+  };
+  const scrub = (e) => {
+    const h = Number(e.target.value);
+    clock.current.hour = h + 0.01;
+    clock.current.playing = false;
+    setPlaying(false);
+    setHour(h);
+  };
+
+  const applyFix = (action) => {
+    if (!action) return;
+    if (action.panelWatts) setPanelWatts(action.panelWatts);
+    if (action.swapAC) {
+      setLoad((prev) => {
+        const n = (prev.ac15?.qty || 0) + (prev.ac1?.qty || 0);
+        const next = { ...prev, ac15inv: { qty: (prev.ac15inv?.qty || 0) + n, hours: prev.ac15?.hours || prev.ac1?.hours || 8 } };
+        delete next.ac15; delete next.ac1;
+        return next;
+      });
+    }
+    if (action.inverterKW) setCustom((c) => ({ ...c, inverterKW: action.inverterKW }));
+    if (action.batteryKWh) { setWithBattery(true); setCustom((c) => ({ ...c, batteryKWh: action.batteryKWh })); }
+  };
+
+  const k = hour % 24;
+  const night = k < 6 || k >= 18;
+
+  return (
+    <Page>
+      <Hero>
+        <h1>Design your <span>solar system</span> live</h1>
+        <p>Tell us what you run at home and how big your roof is. We size the system, build it on your roof in 3D and show you — honestly — whether it works.</p>
+      </Hero>
+
+      <Layout>
+        <Side>
+          <InputsPanel
+            load={load} setLoad={setLoad}
+            cityId={cityId} setCityId={setCityId}
+            roof={roof} setRoof={setRoof}
+            panelWatts={panelWatts} setPanelWatts={setPanelWatts}
+            mode={mode} setMode={setMode}
+            custom={custom} setCustom={setCustom}
+            withBattery={withBattery} setWithBattery={setWithBattery}
+            offGrid={offGrid} setOffGrid={setOffGrid}
+            plan={plan}
+          />
+        </Side>
+
+          <SceneWrap $status={plan.status}>
+            <Suspense fallback={<Loading>Building your roof…</Loading>}>
+              <RoofScene plan={plan} roof={roof} clock={clock} onHour={onHour} />
+            </Suspense>
+            <Banner $status={plan.status}>
+              <div className="status"><FontAwesomeIcon icon={statusIcon[plan.status]} />{statusText[plan.status]}</div>
+              <div className="live">
+                Sun <b>{plan.solarKw[k].toFixed(1)} kW</b> · Load <b>{plan.loadKw[k].toFixed(1)} kW</b>
+                {plan.chosen.batteryKWh > 0 && <> · Battery <b>{Math.round(plan.sim.soc[k])}%</b></>}
+                {plan.sim.blackout[k] && <div style={{ color: '#fca5a5', fontWeight: 700 }}>{plan.sim.trip[k] ? 'Inverter tripped!' : 'Power cut — house is dark'}</div>}
+              </div>
+            </Banner>
+            <TimeBar>
+              <button type="button" onClick={togglePlay} aria-label={playing ? 'Pause day' : 'Play day'}><FontAwesomeIcon icon={playing ? faPause : faPlay} /></button>
+              <div className="clock"><FontAwesomeIcon icon={night ? faMoon : faSun} style={{ color: night ? '#a5b4fc' : t.orange }} />{fmtHour(k)}</div>
+              <Range min={0} max={23} step={1} value={k} onChange={scrub} aria-label="Time of day" />
+            </TimeBar>
+          </SceneWrap>
+
+        <Main>
+
+          {(plan.issues.length > 0 || plan.fixes.length > 0) && (
+            <Diagnosis $status={plan.status}>
+              <CardTitle>What we found</CardTitle>
+              <ul>
+                {plan.issues.map((i) => (
+                  <li key={i.type}>
+                    <FontAwesomeIcon icon={i.severity === 'fail' ? faCircleXmark : faTriangleExclamation} style={{ color: i.severity === 'fail' ? t.red : t.amber }} />
+                    <div><b>{i.title}</b><span>{i.detail}</span></div>
+                  </li>
+                ))}
+              </ul>
+              {plan.fixes.length > 0 && (
+                <Fixes>
+                  {plan.fixes.map((f) => (
+                    <Fix key={f.title}>
+                      <b><FontAwesomeIcon icon={faWandMagicSparkles} style={{ color: t.orange }} /> {f.title}</b>
+                      <p>{f.detail}</p>
+                      {f.action && <Button type="button" onClick={() => applyFix(f.action)}>Apply</Button>}
+                    </Fix>
+                  ))}
+                </Fixes>
+              )}
+            </Diagnosis>
+          )}
+
+          <Analytics plan={plan} hour={k} />
+          <BookingCard plan={plan} />
+          <p style={{ color: t.muted, fontSize: '0.78rem', margin: 0 }}>
+            Indicative estimate based on average sun hours for {plan.city.name} and typical appliance usage. Prices and tariffs are illustrative; final design is confirmed after a site survey.
+          </p>
+        </Main>
+      </Layout>
+    </Page>
+  );
+}

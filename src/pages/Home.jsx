@@ -55,7 +55,8 @@ function Home() {
         <HeroContent>
           <h1>Powering Tomorrow with Solar Energy</h1>
           <p>Your trusted partner in renewable energy solutions</p>
-          <CTAButton to="/contact">Get Started</CTAButton>
+          <CTAButton to="/planner">Design my solar system</CTAButton>{' '}
+          <CTAButton to="/contact" style={{ background: 'transparent', border: '2px solid #fff' }}>Contact us</CTAButton>
         </HeroContent>
       </HeroSection>
       <ServicesSection />
