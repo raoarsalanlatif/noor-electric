@@ -4,10 +4,10 @@ import styled, { keyframes, css } from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faBolt, faSun, faMoon, faPlay, faRotateRight, faVolumeHigh, faVolumeXmark, faBroom, faTrophy,
-  faCarBattery, faDroplet, faCloudBolt, faArrowLeft, faArrowRight, faArrowUp, faArrowDown, faSolarPanel,
+  faCarBattery, faDroplet, faCloudBolt, faArrowLeft, faArrowRight, faArrowUp, faArrowDown, faSolarPanel, faWind, faLocationArrow,
 } from '@fortawesome/free-solid-svg-icons';
 import { faWhatsapp } from '@fortawesome/free-brands-svg-icons';
-import { newGame } from './state';
+import { newGame, DIFFICULTIES } from './state';
 import { sfx, setMuted } from './sfx';
 import { company } from '../../content/company';
 
@@ -127,13 +127,18 @@ const Card = styled.div`
   h1 span { background: linear-gradient(90deg, ${C.gold}, #ff8a1f, #ff4d2e); -webkit-background-clip: text; background-clip: text; color: transparent; }
   h2 { font-family: 'Poppins', sans-serif; font-size: 1.8rem; color: #fff; margin-bottom: 6px; }
   p.lead { color: ${C.muted}; margin: 0 auto 20px; max-width: 420px; }
+  @media (max-width: 480px) { p.lead { font-size: 0.9rem; margin-bottom: 14px; } }
 `;
 
 const Legend = styled.ul`
   list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 22px; text-align: left;
   li { display: flex; gap: 10px; align-items: center; font-size: 0.86rem; color: #cbd5e1; background: rgba(255,255,255,0.04); padding: 9px 10px; border-radius: 12px; }
   i { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; font-style: normal; flex-shrink: 0; }
-  @media (max-width: 420px) { grid-template-columns: 1fr; }
+  @media (max-width: 480px) {
+    gap: 6px; margin-bottom: 14px;
+    li { font-size: 0.76rem; padding: 7px 8px; gap: 8px; }
+    i { width: 24px; height: 24px; border-radius: 7px; font-size: 0.75rem; }
+  }
 `;
 
 const Big = styled.button`
@@ -168,7 +173,39 @@ const DPad = styled.div`
 
 const fmt = (h) => `${((Math.floor(h) + 11) % 12) + 1}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
 const BEST_KEY = 'noor-solar-rush-best';
-const readBest = () => { try { return Number(localStorage.getItem(BEST_KEY)) || 0; } catch { return 0; } };
+const readBest = (d) => { try { return Number(localStorage.getItem(`${BEST_KEY}-${d}`)) || 0; } catch { return 0; } };
+const DIFF_KEY = 'noor-solar-rush-difficulty';
+const readDiff = () => { try { const d = localStorage.getItem(DIFF_KEY); return DIFFICULTIES[d] ? d : 'normal'; } catch { return 'normal'; } };
+
+const DiffPicker = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 0 0 18px;
+  @media (max-width: 480px) { grid-template-columns: repeat(2, 1fr); }
+  button {
+    border: 1px solid ${C.line}; background: rgba(255,255,255,0.04); color: ${C.text};
+    border-radius: 14px; padding: 10px 6px; cursor: pointer; text-align: center;
+    font-family: 'Poppins', sans-serif; font-weight: 700; font-size: 0.95rem;
+  }
+  button small { display: block; font-family: 'Inter', sans-serif; font-weight: 500; font-size: 0.7rem; color: ${C.muted}; margin-top: 3px; line-height: 1.25; }
+  button em { display: block; font-style: normal; font-size: 0.72rem; color: ${C.gold}; margin-top: 4px; }
+  button.on { border-color: ${C.gold}; background: rgba(247,179,27,0.14); box-shadow: 0 0 0 1px ${C.gold} inset; }
+  button.extreme.on { border-color: #ff4d2e; background: rgba(255,77,46,0.14); box-shadow: 0 0 0 1px #ff4d2e inset; }
+`;
+
+// eslint-disable-next-line react/prop-types
+function Difficulty({ value, onChange }) {
+  return (
+    <DiffPicker role="radiogroup" aria-label="Difficulty">
+      {Object.entries(DIFFICULTIES).map(([k, d]) => (
+        <button key={k} type="button" role="radio" aria-checked={value === k} className={`${k} ${value === k ? 'on' : ''}`} onClick={() => onChange(k)}>
+          {d.label}<small>{d.blurb}</small><em>×{d.score} points</em>
+        </button>
+      ))}
+    </DiffPicker>
+  );
+}
 
 export default function SolarRush() {
   const game = useRef({ ...newGame(), status: 'ready' });
@@ -177,16 +214,20 @@ export default function SolarRush() {
   const [status, setStatus] = useState('ready');
   const [hud, setHud] = useState(null);
   const [result, setResult] = useState(null);
-  const [best, setBest] = useState(readBest);
+  const [diff, setDiffState] = useState(readDiff);
+  const [best, setBest] = useState(() => readBest(readDiff()));
+  const setDiff = (d) => { setDiffState(d); setBest(readBest(d)); try { localStorage.setItem(DIFF_KEY, d); } catch { /* ignore */ } };
   const [toasts, setToasts] = useState([]);
   const [muted, setMutedState] = useState(false);
   const toastId = useRef(0);
 
   useEffect(() => { document.title = `Solar Rush — play | ${company.name}`; }, []);
 
+  const diffRef = useRef(diff);
+  diffRef.current = diff;
   const start = useCallback(() => {
     sfx.unlock();
-    game.current = newGame();
+    game.current = newGame(diffRef.current);
     setResult(null); setToasts([]);
     setStatus('playing');
   }, []);
@@ -219,7 +260,7 @@ export default function SolarRush() {
     setStatus('over');
     setBest((b) => {
       const nb = Math.max(b, r.score);
-      try { localStorage.setItem(BEST_KEY, String(nb)); } catch { /* ignore */ }
+      try { localStorage.setItem(`${BEST_KEY}-${diffRef.current}`, String(nb)); } catch { /* ignore */ }
       return nb;
     });
   }, []);
@@ -233,7 +274,7 @@ export default function SolarRush() {
 
   const pct = hud ? Math.max(0, Math.min(100, (hud.energy / hud.cap) * 100)) : 60;
   const barColor = pct > 50 ? 'linear-gradient(90deg,#22c55e,#4ade80)' : pct > 22 ? 'linear-gradient(90deg,#f59e0b,#fbbf24)' : 'linear-gradient(90deg,#dc2626,#f87171)';
-  const shareText = result ? `I kept my house powered for ${result.day} day${result.day > 1 ? 's' : ''} and scored ${result.score} in Solar Rush by ${company.name}! Can you beat me? https://${company.website}/play` : '';
+  const shareText = result ? `I kept my house powered for ${result.day} day${result.day > 1 ? 's' : ''} and scored ${result.score} on ${DIFFICULTIES[diff].label} in Solar Rush by ${company.name}! Can you beat me? https://${company.website}/play` : '';
 
   return (
     <Page>
@@ -254,6 +295,13 @@ export default function SolarRush() {
             </EnergyBar></Chip>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               <Chip><FontAwesomeIcon icon={hud.phase === 'day' ? faSun : faMoon} color={hud.phase === 'day' ? C.gold : '#a5b4fc'} /><span><b>Day {hud.day}</b> <small>{fmt(hud.hour)}</small></span></Chip>
+              {hud.windSpeed > 0.2 && (
+                <Chip style={hud.gusting ? { borderColor: '#e2e8f0', background: 'rgba(148,163,184,0.25)' } : undefined}>
+                  <FontAwesomeIcon icon={faWind} color="#cbd5e1" />
+                  <FontAwesomeIcon icon={faLocationArrow} style={{ transform: `rotate(${(Math.atan2(hud.windZ, hud.windX) * 180) / Math.PI + 45}deg)`, color: hud.gusting ? '#fff' : '#94a3b8' }} />
+                  <b>{Math.round(hud.windSpeed * 3.6 * 4)}</b><small>km/h{hud.gusting ? ' gust!' : ''}</small>
+                </Chip>
+              )}
               <Chip><FontAwesomeIcon icon={faTrophy} color={C.gold} /><b>{hud.score}</b>{hud.combo > 1.2 && <small>×{hud.combo.toFixed(1)}</small>}</Chip>
             </div>
           </Hud>
@@ -290,14 +338,16 @@ export default function SolarRush() {
               <li><i style={{ background: '#4fb3ff33', color: '#7dd3fc' }}><FontAwesomeIcon icon={faDroplet} /></i>Water washes the panel</li>
               <li><i style={{ background: '#f8717133', color: C.red }}><FontAwesomeIcon icon={faCloudBolt} /></i>Dodge lightning under storms</li>
               <li><i style={{ background: '#a5b4fc33', color: '#a5b4fc' }}><FontAwesomeIcon icon={faMoon} /></i>No sun at night — plan ahead</li>
+              <li style={{ gridColumn: '1 / -1' }}><i style={{ background: '#e2e8f033', color: '#e2e8f0' }}><FontAwesomeIcon icon={faWind} /></i>Wind pushes you off your spot — on Hard it blows the sun too. Watch the gust meter!</li>
             </Legend>
             <p style={{ color: '#ffd23f', fontWeight: 600, fontSize: '0.92rem', margin: '-6px 0 18px' }}>
               Tip: a glowing circle on the roof shows where each item will land — stand on it. Your ring turns gold when you’re in the right spot.
             </p>
-            <Big type="button" onClick={start}><FontAwesomeIcon icon={faPlay} /> Play</Big>
+            <Difficulty value={diff} onChange={setDiff} />
+            <Big type="button" onClick={start}><FontAwesomeIcon icon={faPlay} /> Play {DIFFICULTIES[diff].label}</Big>
             <p style={{ color: C.muted, fontSize: '0.8rem', marginTop: 14 }}>
               Arrows / WASD or mouse to move · Space to clean · On phones, drag on the roof
-              {best > 0 && <><br />Your best: <b style={{ color: C.gold }}>{best}</b></>}
+              {best > 0 && <><br />Your best on {DIFFICULTIES[diff].label}: <b style={{ color: C.gold }}>{best}</b></>}
             </p>
           </Card>
         </Overlay>
@@ -307,13 +357,14 @@ export default function SolarRush() {
         <Overlay>
           <Card>
             <h2>Load-shedding! 🔌</h2>
-            <p className="lead">The house ran out of power at {fmt(result.hour)} on day {result.day}.</p>
+            <p className="lead">The house ran out of power at {fmt(result.hour)} on day {result.day}. {diff !== 'extreme' && 'Think you can handle a harder storm?'}</p>
             <Stats>
               <div><b>{result.score}</b><small>score</small></div>
               <div><b>{result.day}</b><small>day{result.day > 1 ? 's' : ''} survived</small></div>
-              <div><b>{Math.max(result.score, best)}</b><small>best</small></div>
+              <div><b>{best}</b><small>best · {DIFFICULTIES[diff].label}</small></div>
             </Stats>
-            <Big type="button" onClick={start}><FontAwesomeIcon icon={faRotateRight} /> Play again</Big>
+            <Difficulty value={diff} onChange={setDiff} />
+            <Big type="button" onClick={start}><FontAwesomeIcon icon={faRotateRight} /> Play again · {DIFFICULTIES[diff].label}</Big>
             <Row>
               <a href={`https://wa.me/?text=${encodeURIComponent(shareText)}`} target="_blank" rel="noopener noreferrer"><FontAwesomeIcon icon={faWhatsapp} /> Challenge a friend</a>
               <Link to="/planner"><FontAwesomeIcon icon={faSolarPanel} /> Design my real system</Link>

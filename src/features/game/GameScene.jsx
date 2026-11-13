@@ -8,7 +8,7 @@ import SolarPanelModel from '../three/SolarPanelModel';
 import Worker from '../three/Worker';
 import { sfx } from './sfx';
 
-import { ROOF, SITE, DAY_LEN, NIGHT_LEN, LAT, ROOF_TOP, BOUND, PANEL, CATCH_Y0, CATCH_Y1, rand, PLAYER_SCALE } from './state';
+import { DIFFICULTIES, ROOF, SITE, DAY_LEN, NIGHT_LEN, LAT, ROOF_TOP, BOUND, PANEL, CATCH_Y0, CATCH_Y1, rand, PLAYER_SCALE } from './state';
 
 function hourOf(g) {
   return g.phase === 'day' ? 6 + 12 * (g.phaseT / DAY_LEN) : (18 + 12 * (g.phaseT / NIGHT_LEN)) % 24;
@@ -84,6 +84,37 @@ function CatchRing({ ringRef }) {
       <meshBasicMaterial color="#ffffff" transparent opacity={0.45} depthWrite={false} />
     </mesh>
   );
+}
+
+/* ------------------------------- wind streaks ----------------------------- */
+function WindStreaks({ game }) {
+  const N = 46;
+  const meshes = useRef([]);
+  const pts = useMemo(() => Array.from({ length: N }, () => ({ x: rand(-13, 13), y: rand(0.4, 7), z: rand(-13, 13), l: rand(0.6, 1.6) })), []);
+  useFrame((_, dt) => {
+    const w = game.current.wind || { x: 0, z: 0, speed: 0, angle: 0 };
+    const show = game.current.status === 'playing' && w.speed > 0.3;
+    const op = Math.min(0.55, w.speed / 9);
+    pts.forEach((p, i) => {
+      const m = meshes.current[i];
+      if (!m) return;
+      m.visible = show;
+      if (!show) return;
+      p.x += w.x * 3.2 * dt; p.z += w.z * 3.2 * dt;
+      if (p.x > 13) p.x -= 26; if (p.x < -13) p.x += 26;
+      if (p.z > 13) p.z -= 26; if (p.z < -13) p.z += 26;
+      m.position.set(p.x, ROOF_TOP + p.y, p.z);
+      m.rotation.y = -w.angle;
+      m.scale.set(p.l * (0.6 + w.speed * 0.25), 1, 1);
+      m.material.opacity = op;
+    });
+  });
+  return pts.map((_, i) => (
+    <mesh key={i} ref={(m) => { meshes.current[i] = m; }} visible={false}>
+      <boxGeometry args={[1, 0.025, 0.025]} />
+      <meshBasicMaterial color="#ffffff" transparent opacity={0.3} depthWrite={false} />
+    </mesh>
+  ));
 }
 
 /* ------------------------------- particles -------------------------------- */
@@ -218,8 +249,8 @@ function Engine({ game, keys, clock, onHud, onEvent, onOver, itemRefs, markerRef
     g.t += dt; g.phaseT += dt;
     if (g.phase === 'day' && g.phaseT >= DAY_LEN) { g.phase = 'night'; g.phaseT = 0; sfx.night(); onEvent({ text: 'Night falls — run on your battery!', color: '#a5b4fc', big: true }); }
     if (g.phase === 'night' && g.phaseT >= NIGHT_LEN) {
-      g.phase = 'day'; g.phaseT = 0; g.day += 1; g.score += 100; sfx.day();
-      onEvent({ text: `Day ${g.day}! +100 survival bonus`, color: '#ffd23f', big: true });
+      g.phase = 'day'; g.phaseT = 0; g.day += 1; g.score += Math.round(100 * (g.diff?.score || 1)); sfx.day();
+      onEvent({ text: `Day ${g.day}! +${Math.round(100 * (g.diff?.score || 1))} survival bonus`, color: '#ffd23f', big: true });
     }
     const hour = hourOf(g);
     clock.current.hour = hour;
@@ -231,7 +262,27 @@ function Engine({ game, keys, clock, onHud, onEvent, onOver, itemRefs, markerRef
     if (hour >= 12 && hour < 16.5) load += 1.1; // ACs in the afternoon
     if (hour >= 18 && hour < 23) load += 0.9; // evening lights, TV, cooking
     if (hour >= 23 || hour < 6) load += 0.25;
-    g.energy -= load * lvl * dt;
+    const D = g.diff || DIFFICULTIES.normal;
+    g.energy -= load * lvl * D.drain * dt;
+
+    /* ---- wind: steady breeze plus gusts that grow each day ---- */
+    const wd = g.wind;
+    wd.angle += Math.sin(g.t * 0.13) * 0.15 * dt;
+    if (D.gust > 0) {
+      wd.nextGust -= dt;
+      if (wd.nextGust <= 0 && wd.gustT <= 0) {
+        wd.gustT = rand(1.4, 2.4);
+        wd.gustLen = wd.gustT;
+        wd.gustPeak = D.gust * (1 + (g.day - 1) * 0.12) * rand(0.7, 1.1);
+        wd.angle += rand(-0.9, 0.9);
+        wd.nextGust = rand(3.5, 7) / (1 + (g.day - 1) * 0.1);
+        if (wd.gustPeak > 2.5) onEvent({ text: 'Strong gust! Hold your ground 🌬️', color: '#e2e8f0' });
+      }
+    }
+    if (wd.gustT > 0) { wd.gustT -= dt; wd.gust = wd.gustPeak * Math.sin(Math.PI * (1 - wd.gustT / wd.gustLen)); } else wd.gust = 0;
+    wd.speed = D.wind > 0 ? D.wind * (1 + (g.day - 1) * 0.1) + wd.gust : 0;
+    wd.x = Math.cos(wd.angle) * wd.speed;
+    wd.z = Math.sin(wd.angle) * wd.speed;
 
     /* ---- player ---- */
     const ra = workerAnim.current;
@@ -262,6 +313,12 @@ function Engine({ game, keys, clock, onHud, onEvent, onOver, itemRefs, markerRef
         w.rotation.y += d * 0.3;
       }
     }
+    // the wind pushes the installer (and the big panel he's holding acts like a sail)
+    if (wd.speed > 0) {
+      g.px = THREE.MathUtils.clamp(g.px + wd.x * dt, -BOUND, BOUND);
+      g.pz = THREE.MathUtils.clamp(g.pz + wd.z * dt, -BOUND, BOUND);
+    }
+    if (workerRef.current) workerRef.current.rotation.z = THREE.MathUtils.lerp(workerRef.current.rotation.z, -wd.x * 0.03, 0.1);
     ra.mode = g.cleaning > 0 ? 'kneel' : g.stun > 0 ? 'facepalm' : 'carry';
     ra.moving = canMove && len > 0;
     ra.speed = 1.4;
@@ -274,7 +331,7 @@ function Engine({ game, keys, clock, onHud, onEvent, onOver, itemRefs, markerRef
       if (!it) return;
       it.active = true; it.x = x ?? rand(-BOUND, BOUND); it.z = z ?? rand(-BOUND, BOUND);
       it.y = ROOF_TOP + 13 + rand(0, 3);
-      const fall = 4.2 + g.day * 0.5;
+      const fall = (4.2 + g.day * 0.5) * D.fall;
       it.vy = type === 'sun' ? fall * 0.85 : type === 'big' ? fall * 0.7 : type === 'dust' ? fall * 1.1 : fall * 0.8;
       it.phase = rand(0, 6);
     };
@@ -285,7 +342,7 @@ function Engine({ game, keys, clock, onHud, onEvent, onOver, itemRefs, markerRef
       tick('big', 0.05 + 0.04 * sunAmt, () => spawn('big'));
       tick('water', g.dirt > 0.2 ? 0.14 : 0.04, () => spawn('water'));
     }
-    tick('dust', (0.22 + 0.07 * (g.day - 1)) * (g.phase === 'day' ? 1 : 0.4), () => spawn('dust'));
+    tick('dust', (0.22 + 0.07 * (g.day - 1)) * D.dust * (g.phase === 'day' ? 1 : 0.4), () => spawn('dust'));
     tick('battery', g.phase === 'day' ? 0.05 : 0.07, () => spawn('battery'));
     if (g.day >= 2 || g.t > 22) {
       tick('cloud', 0.06 + 0.02 * g.day, () => {
@@ -333,6 +390,10 @@ function Engine({ game, keys, clock, onHud, onEvent, onOver, itemRefs, markerRef
       if (!it.active) { if (r) r.visible = false; if (mk) mk.visible = false; return; }
       it.y -= it.vy * dt;
       it.phase += dt * 3;
+      if (D.drift > 0) {
+        it.x = THREE.MathUtils.clamp(it.x + wd.x * D.drift * dt, -BOUND - 1.5, BOUND + 1.5);
+        it.z = THREE.MathUtils.clamp(it.z + wd.z * D.drift * dt, -BOUND - 1.5, BOUND + 1.5);
+      }
       if (r) {
         r.visible = true;
         r.position.set(it.x, it.y, it.z);
@@ -342,7 +403,12 @@ function Engine({ game, keys, clock, onHud, onEvent, onOver, itemRefs, markerRef
         const h = Math.max(0, it.y - ROOF_TOP);
         const k = Math.min(1, h / 14); // 1 = just spawned, 0 = about to land
         mk.visible = true;
-        mk.position.set(it.x, ROOF_TOP + 0.04, it.z);
+        // predict where the wind will carry it before it lands
+        const tLand = Math.max(0, (it.y - (ROOF_TOP + 2.6)) / it.vy);
+        const lx = THREE.MathUtils.clamp(it.x + wd.x * D.drift * tLand, -BOUND - 1.5, BOUND + 1.5);
+        const lz = THREE.MathUtils.clamp(it.z + wd.z * D.drift * tLand, -BOUND - 1.5, BOUND + 1.5);
+        mk.position.set(lx, ROOF_TOP + 0.04, lz);
+        mk.children[2].position.x = it.x - lx; mk.children[2].position.z = it.z - lz;
         const [ring, dot, beam] = mk.children;
         ring.scale.setScalar(0.55 + k * 1.1); // shrinks onto the spot as it falls
         ring.material.opacity = 0.35 + (1 - k) * 0.55;
@@ -359,7 +425,7 @@ function Engine({ game, keys, clock, onHud, onEvent, onOver, itemRefs, markerRef
           const base = it.type === 'big' ? 18 : 5.5;
           const gain = base * eff * (shaded ? 0.35 : 1);
           g.energy += gain; g.kwh += gain * 0.1;
-          g.score += Math.round((it.type === 'big' ? 50 : 10) * g.combo);
+          g.score += Math.round((it.type === 'big' ? 50 : 10) * g.combo * D.score);
           g.combo = Math.min(5, g.combo + (it.type === 'big' ? 1 : 0.25));
           if (it.type === 'big') { sfx.big(); onEvent({ text: `MEGA SUN! +${Math.round(gain)}⚡`, color: '#ffd23f' }); } else sfx.catch(g.combo * 2);
           burst.current?.(it.x, it.y, it.z, '#ffd23f');
@@ -368,7 +434,7 @@ function Engine({ game, keys, clock, onHud, onEvent, onOver, itemRefs, markerRef
           onEvent({ text: 'Dusty panel! Press SPACE / Clean', color: '#d6a46a' });
           burst.current?.(it.x, it.y, it.z, '#7a5a3a');
         } else if (it.type === 'battery') {
-          g.cap = Math.min(200, g.cap + 15); g.energy += 12; g.score += 25; sfx.battery();
+          g.cap = Math.min(200, g.cap + 15); g.energy += 12; g.score += Math.round(25 * D.score); sfx.battery();
           onEvent({ text: 'Battery upgrade! +15 capacity', color: '#4ade80' });
           burst.current?.(it.x, it.y, it.z, '#4ade80');
         } else if (it.type === 'water') {
@@ -400,7 +466,7 @@ function Engine({ game, keys, clock, onHud, onEvent, onOver, itemRefs, markerRef
     hudT.current += dt;
     if (hudT.current > 0.1) {
       hudT.current = 0;
-      onHud({ energy: g.energy, cap: g.cap, score: g.score, day: g.day, hour, phase: g.phase, combo: g.combo, dirt: g.dirt, cleaning: g.cleaning > 0, flash: g.flash, phaseLeft: (g.phase === 'day' ? DAY_LEN : NIGHT_LEN) - g.phaseT });
+      onHud({ energy: g.energy, cap: g.cap, score: g.score, day: g.day, hour, phase: g.phase, combo: g.combo, dirt: g.dirt, cleaning: g.cleaning > 0, flash: g.flash, windX: wd.x, windZ: wd.z, windSpeed: wd.speed, gusting: wd.gust > 1.5, phaseLeft: (g.phase === 'day' ? DAY_LEN : NIGHT_LEN) - g.phaseT });
     }
   });
   return null;
@@ -453,6 +519,7 @@ function SceneContent(props) {
       <ItemMeshes game={game} refs={itemRefs} />
       <ItemMarkers game={game} refs={markerRefs} />
       <CatchRing ringRef={catchRing} />
+      <WindStreaks game={game} />
       <Weather game={game} />
       <Bursts burstRef={burst} />
       <TouchPlane game={game} />
