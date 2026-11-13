@@ -1,6 +1,7 @@
 import styled, { keyframes } from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faWhatsapp } from '@fortawesome/free-brands-svg-icons';
+import { useLocation } from 'react-router-dom';
 import { whatsappLink } from '../../content/company';
 
 const ring = keyframes`
@@ -29,6 +30,8 @@ const Fab = styled.a`
 `;
 
 function WhatsAppButton() {
+  const { pathname } = useLocation();
+  if (pathname === '/play') return null;
   return (
     <Fab href={whatsappLink()} target="_blank" rel="noopener noreferrer" aria-label="Chat with us on WhatsApp">
       <FontAwesomeIcon icon={faWhatsapp} />
