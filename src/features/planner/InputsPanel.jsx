@@ -2,9 +2,10 @@
 import { useState } from 'react';
 import styled from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faMinus, faPlus, faPlug, faRulerCombined, faSolarPanel } from '@fortawesome/free-solid-svg-icons';
+import { faMinus, faPlus, faPlug, faRulerCombined, faSolarPanel, faLocationCrosshairs } from '@fortawesome/free-solid-svg-icons';
 import { APPLIANCES } from './appliances';
-import { CITIES, PANEL_OPTIONS, INVERTER_SIZES } from './config';
+import { CITIES, PANEL_OPTIONS, INVERTER_SIZES, nearestCity } from './config';
+import { SEASONS } from '../three/sun';
 import { Card, Label, Range, NumberInput, Select, Segmented, Seg, Toggle, Row, t } from './ui';
 
 const Tabs = styled.div`
@@ -146,27 +147,119 @@ function LoadTab({ load, setLoad, plan }) {
   );
 }
 
-function SiteTab({ cityId, setCityId, roof, setRoof, panelWatts, setPanelWatts, plan }) {
+const SubHead = styled.h4`
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: ${t.muted};
+  margin: 18px 0 10px;
+  padding-top: 14px;
+  border-top: 1px solid ${t.line};
+`;
+
+const GpsButton = styled.button`
+  width: 100%;
+  margin-top: 8px;
+  border: 1px solid ${t.line};
+  background: ${t.bg};
+  color: ${t.text};
+  border-radius: 10px;
+  padding: 9px 12px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  &:hover { border-color: ${t.orange}; }
+`;
+
+function SiteTab({ location, setLocation, season, setSeason, site, setSite, roof, setRoof, panelWatts, setPanelWatts, plan }) {
+  const [gps, setGps] = useState('');
   const dim = (key, label) => (
     <Field>
       <Row $justify="space-between"><Label>{label}</Label>
         <Row $gap="4px"><NumberInput min={3} max={60} value={roof[key]} onChange={(e) => setRoof({ ...roof, [key]: Math.max(1, Number(e.target.value) || 0) })} /><span style={{ color: t.muted }}>m</span></Row>
       </Row>
-      <Range min={3} max={40} step={0.5} value={roof[key]} onChange={(e) => setRoof({ ...roof, [key]: Number(e.target.value) })} />
+      <Range min={4} max={40} step={0.5} value={roof[key]} onChange={(e) => setRoof({ ...roof, [key]: Number(e.target.value) })} />
     </Field>
   );
   const ok = plan.overflow === 0;
+  const set = (patch) => setSite({ ...site, ...patch });
+  const useGps = () => {
+    if (!navigator.geolocation) { setGps('Location is not available in this browser.'); return; }
+    setGps('Finding you…');
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        const { city, km } = nearestCity(coords.latitude, coords.longitude);
+        setLocation({ ...city, id: 'gps', name: km < 40 ? city.name : `My location (near ${city.name})`, lat: coords.latitude });
+        setGps(`Using your location · sun path for ${coords.latitude.toFixed(2)}°N`);
+      },
+      () => setGps('Could not get your location — pick a city instead.'),
+      { timeout: 10000, maximumAge: 600000 },
+    );
+  };
   return (
     <>
       <Field>
-        <Label>City</Label>
-        <Select value={cityId} onChange={(e) => setCityId(e.target.value)}>
+        <Label>Location</Label>
+        <Select value={location.id === 'gps' ? 'gps' : location.id} onChange={(e) => { const c = CITIES.find((x) => x.id === e.target.value); if (c) { setLocation(c); setGps(''); } }}>
+          {location.id === 'gps' && <option value="gps">{location.name}</option>}
           {CITIES.map((c) => <option key={c.id} value={c.id}>{c.name} — {c.sunHours} sun hours</option>)}
         </Select>
+        <GpsButton type="button" onClick={useGps}><FontAwesomeIcon icon={faLocationCrosshairs} /> Use my location</GpsButton>
+        {gps && <Hint>{gps}</Hint>}
       </Field>
+      <Field>
+        <Label>Season</Label>
+        <Segmented>
+          {Object.entries(SEASONS).map(([k, v]) => (
+            <Seg key={k} type="button" $active={season === k} onClick={() => setSeason(k)}>{v.label}</Seg>
+          ))}
+        </Segmented>
+        <Hint>The sun follows its real path for this latitude and season.</Hint>
+      </Field>
+
+      <SubHead>Roof size</SubHead>
       {dim('width', 'Roof width (front)')}
       {dim('length', 'Roof depth')}
-      <Total>
+
+      <SubHead>Your house</SubHead>
+      <Field>
+        <Label>Storeys</Label>
+        <Segmented>
+          {[1, 2, 3].map((n) => <Seg key={n} type="button" $active={site.storeys === n} onClick={() => set({ storeys: n })}>{n}</Seg>)}
+        </Segmented>
+      </Field>
+      <Field>
+        <Label>Parapet wall around the roof</Label>
+        <Segmented>
+          {[[0, 'None'], [0.9, '3 ft'], [1.5, '5 ft']].map(([h, l]) => <Seg key={h} type="button" $active={site.parapetH === h} onClick={() => set({ parapetH: h })}>{l}</Seg>)}
+        </Segmented>
+        <Hint>Taller walls shade the panels next to them, so we keep a wider gap.</Hint>
+      </Field>
+      <Toggle>
+        <span>Stair room (mumty)<small>Takes a corner of the roof</small></span>
+        <input type="checkbox" checked={site.stairRoom} onChange={(e) => set({ stairRoom: e.target.checked })} />
+      </Toggle>
+      <Toggle>
+        <span>Water tank<small>{site.stairRoom ? 'Sits on top of the stair room' : 'Sits on the roof'}</small></span>
+        <input type="checkbox" checked={site.tank} onChange={(e) => set({ tank: e.target.checked })} />
+      </Toggle>
+      <Row $justify="space-between" style={{ padding: '8px 0' }}>
+        <span style={{ color: t.text, fontSize: '0.92rem' }}>AC outdoor units on roof</span>
+        <Stepper>
+          <button type="button" aria-label="Fewer AC units" onClick={() => set({ acUnits: Math.max(0, site.acUnits - 1) })}><FontAwesomeIcon icon={faMinus} /></button>
+          <b>{site.acUnits}</b>
+          <button type="button" aria-label="More AC units" onClick={() => set({ acUnits: Math.min(6, site.acUnits + 1) })}><FontAwesomeIcon icon={faPlus} /></button>
+        </Stepper>
+      </Row>
+      <Toggle>
+        <span>Elevated steel structure<small>Raises panels above walls, ACs and tank</small></span>
+        <input type="checkbox" checked={site.elevated} onChange={(e) => set({ elevated: e.target.checked })} />
+      </Toggle>
+
+      <Total style={{ marginTop: 12 }}>
         <span>Roof area {Math.round(plan.layout.roofArea)} m²</span>
         <span style={{ color: ok ? t.green : t.red }}><strong style={{ color: 'inherit' }}>{plan.layout.maxPanels}</strong> panels fit</span>
       </Total>
@@ -177,7 +270,7 @@ function SiteTab({ cityId, setCityId, roof, setRoof, panelWatts, setPanelWatts, 
             <Seg key={p.watts} type="button" $active={panelWatts === p.watts} onClick={() => setPanelWatts(p.watts)}>{p.watts} W</Seg>
           ))}
         </Segmented>
-        <Hint>Rows are spaced {plan.layout.pitch.toFixed(1)} m apart so panels don&apos;t shade each other, with a safety margin along the edges.</Hint>
+        <Hint>Rows are spaced {plan.layout.pitch.toFixed(1)} m apart so panels don&apos;t shade each other.</Hint>
       </Field>
       <Demo type="button" onClick={() => setRoof({ width: 6, length: 7 })}>Try a small 6 × 7 m roof</Demo>
     </>
@@ -242,7 +335,7 @@ export default function InputsPanel(props) {
     <Card>
       <Tabs>
         <Tab type="button" $active={tab === 'load'} onClick={() => setTab('load')}><FontAwesomeIcon icon={faPlug} />Your load<span>Step 1</span></Tab>
-        <Tab type="button" $active={tab === 'site'} onClick={() => setTab('site')}><FontAwesomeIcon icon={faRulerCombined} />Your roof<span>Step 2</span></Tab>
+        <Tab type="button" $active={tab === 'site'} onClick={() => setTab('site')}><FontAwesomeIcon icon={faRulerCombined} />Your home<span>Step 2</span></Tab>
         <Tab type="button" $active={tab === 'system'} onClick={() => setTab('system')}><FontAwesomeIcon icon={faSolarPanel} />System<span>Step 3</span></Tab>
       </Tabs>
       {tab === 'load' && <LoadTab {...props} />}

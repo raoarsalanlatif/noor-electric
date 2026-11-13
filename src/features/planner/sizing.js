@@ -1,5 +1,6 @@
 import { APPLIANCE_MAP, PROFILES } from './appliances';
-import { PLANNER_CONFIG as CFG, PANEL_OPTIONS, INVERTER_SIZES, CITIES } from './config';
+import { PLANNER_CONFIG as CFG, PANEL_OPTIONS, INVERTER_SIZES, CITIES, DEFAULT_SITE } from './config';
+import { dailyShape, SEASONS } from '../three/sun';
 
 const TILT = (15 * Math.PI) / 180;
 const DIVERSITY = 0.8; // not every appliance switches on at the same instant
@@ -43,31 +44,71 @@ export function buildLoadCurve(load) {
   return { kw, running };
 }
 
-/** Bell-shaped solar output for one kWp, normalised so the day sums to `sunHours` kWh. */
-export function solarShape(sunHours) {
-  const raw = Array.from({ length: 24 }, (_, k) => {
-    const t = k + 0.5;
-    if (t < 6 || t > 18) return 0;
-    return Math.pow(Math.sin((Math.PI * (t - 6)) / 12), 1.5);
-  });
-  const sum = raw.reduce((a, b) => a + b, 0);
-  return raw.map((v) => (v / sum) * sunHours);
+/** Solar output for one kWp per hour, following the real sun path; sums to `sunHours`. */
+export function solarShape(sunHours, lat = 32, season = 'annual') {
+  return dailyShape(lat, season).map((w) => w * sunHours);
 }
 
-export function roofLayout(roof, panel) {
-  const usableW = Math.max(0, roof.width - 2 * CFG.roofSetback);
-  const usableL = Math.max(0, roof.length - 2 * CFG.roofSetback);
-  const pitch = panel.length * Math.cos(TILT) + 0.6;
+/** Things standing on the roof, in roof coordinates (origin at roof centre, +z = front/south). */
+export function roofObstacles(roof, site = DEFAULT_SITE) {
+  const W = roof.width; const L = roof.length;
+  const out = [];
+  if (site.stairRoom) {
+    const w = Math.min(3, W * 0.45); const d = Math.min(3.4, L * 0.45);
+    out.push({ type: 'stairRoom', x: -W / 2 + 0.2 + w / 2, z: -L / 2 + 0.2 + d / 2, w, d, h: 2.7, margin: site.elevated ? 0.2 : 0.6 });
+  }
+  let acStart = W / 2 - 0.8;
+  if (site.tank) {
+    if (site.stairRoom) {
+      const sr = out[0];
+      out.push({ type: 'tank', x: sr.x, z: sr.z, w: 1.2, d: 1.2, h: 1.3, onTop: 2.7, margin: 0 });
+    } else {
+      out.push({ type: 'tank', x: W / 2 - 1.1, z: -L / 2 + 1.1, w: 1.2, d: 1.2, h: 1.3, margin: site.elevated ? -9 : 0.4 });
+      acStart -= 1.8;
+    }
+  }
+  for (let i = 0; i < (site.acUnits || 0); i++) {
+    out.push({ type: 'ac', x: acStart - i * 1.25, z: -L / 2 + 0.45, w: 0.9, d: 0.38, h: 0.62, margin: site.elevated ? -9 : 0.15 });
+  }
+  return out;
+}
+
+export function roofLayout(roof, panel, site = DEFAULT_SITE) {
+  const depth = panel.length * Math.cos(TILT);
+  const pitch = depth + 0.6;
   const colW = panel.width + CFG.panelGap;
+  const ph = site.parapetH || 0;
+  // parapet walls shade the panels behind them, mostly on the sunny (front) side
+  const sFront = site.elevated ? 0.3 : Math.max(CFG.roofSetback, 0.3 + ph * 1.6);
+  const sOther = site.elevated ? 0.3 : Math.max(CFG.roofSetback, 0.3 + ph * 0.8);
+  const usableW = Math.max(0, roof.width - 2 * sOther);
   const cols = Math.max(0, Math.floor(usableW / colW));
-  // the last row needs only its own footprint, not a full pitch
-  const rows = usableL >= panel.length * Math.cos(TILT)
-    ? 1 + Math.floor((usableL - panel.length * Math.cos(TILT)) / pitch)
-    : 0;
+  const startX = -((cols - 1) * colW) / 2;
+  const obstacles = roofObstacles(roof, site);
+  const hits = (x, z) => obstacles.some((o) => o.margin > -5 && !o.onTop
+    && Math.abs(x - o.x) < (colW + o.w) / 2 + o.margin
+    && Math.abs(z - o.z) < (depth + o.d) / 2 + o.margin);
+
+  const slots = [];
+  let rows = 0;
+  for (let z = -roof.length / 2 + sOther + depth / 2; z <= roof.length / 2 - sFront - depth / 2 + 1e-6; z += pitch) {
+    rows += 1;
+    for (let c = 0; c < cols; c++) {
+      const x = startX + c * colW;
+      if (!hits(x, z)) slots.push({ x, z });
+    }
+  }
+  const ovCols = cols || 3;
+  const ovStart = -((ovCols - 1) * colW) / 2;
+  const overflowSlot = (k) => ({
+    x: ovStart + (k % ovCols) * colW,
+    z: roof.length / 2 + 0.4 + depth / 2 + Math.floor(k / ovCols) * pitch,
+  });
   return {
-    cols, rows, pitch, colW,
-    maxPanels: cols * rows,
-    footprint: pitch * colW, // m² of roof one panel effectively needs
+    cols, rows, pitch, colW, depth, sFront, sOther,
+    slots, obstacles, overflowSlot,
+    maxPanels: slots.length,
+    footprint: pitch * colW,
     roofArea: roof.width * roof.length,
   };
 }
@@ -119,21 +160,22 @@ const sum = (arr) => arr.reduce((a, b) => a + b, 0);
  * Main entry: everything the UI needs, recomputed on every input change.
  */
 export function computePlan(input) {
-  const { load, cityId, roof, panelWatts, mode, custom, withBattery, offGrid } = input;
-  const city = CITIES.find((c) => c.id === cityId) || CITIES[0];
+  const { load, cityId, roof, panelWatts, mode, custom, withBattery, offGrid, location, season = 'annual', site = DEFAULT_SITE } = input;
+  const city = location || CITIES.find((c) => c.id === cityId) || CITIES[0];
+  const sunHours = city.sunHours * (SEASONS[season] || SEASONS.annual).sunFactor;
   const panel = PANEL_OPTIONS.find((p) => p.watts === panelWatts) || PANEL_OPTIONS[1];
 
   const { kw: loadKw, running } = buildLoadCurve(load);
   const dailyKWh = sum(loadKw);
   const peakW = Math.max(...running);
 
-  const requiredKW = dailyKWh / (city.sunHours * CFG.performanceRatio);
+  const requiredKW = dailyKWh / (sunHours * CFG.performanceRatio);
   const panelsNeeded = Math.ceil((requiredKW * 1000) / panel.watts);
-  const layout = roofLayout(roof, panel);
+  const layout = roofLayout(roof, panel, site);
   const areaNeeded = panelsNeeded * layout.footprint + 2 * CFG.roofSetback * (roof.width + roof.length);
 
   // energy the battery must cover = load not served directly by sun (assuming a right-sized array)
-  const shape = solarShape(city.sunHours * CFG.performanceRatio);
+  const shape = solarShape(sunHours * CFG.performanceRatio, city.lat, season);
   const idealSolar = shape.map((s) => s * requiredKW);
   const nightKWh = sum(loadKw.map((l, k) => Math.max(0, l - idealSolar[k])));
   const recBattery = Math.ceil(nightKWh / CFG.batteryUsable / 2.5) * 2.5;
@@ -203,18 +245,20 @@ export function computePlan(input) {
 
   // ---- fixes ----
   const fixes = [];
-  const prodPerPanel = (panel.watts / 1000) * city.sunHours * CFG.performanceRatio;
+  const prodPerPanel = (panel.watts / 1000) * sunHours * CFG.performanceRatio;
   if (overflow > 0) {
     const fitPct = Math.min(100, Math.round(((layout.maxPanels * prodPerPanel) / dailyKWh) * 100));
-    fixes.push({ title: `Best fit: ${layout.maxPanels} panels`, detail: `${round((layout.maxPanels * panel.watts) / 1000)} kW on this roof covers about ${fitPct}% of your use.` });
+    fixes.push({ title: `Best fit: ${layout.maxPanels} panel${layout.maxPanels === 1 ? '' : 's'}`, detail: `${round((layout.maxPanels * panel.watts) / 1000)} kW on this roof covers about ${fitPct}% of your use.` });
     const big = PANEL_OPTIONS[PANEL_OPTIONS.length - 1];
     if (big.watts !== panel.watts) {
-      const bigLayout = roofLayout(roof, big);
-      const bigPct = Math.min(100, Math.round(((bigLayout.maxPanels * (big.watts / 1000) * city.sunHours * CFG.performanceRatio) / dailyKWh) * 100));
+      const bigLayout = roofLayout(roof, big, site);
+      const bigPct = Math.min(100, Math.round(((bigLayout.maxPanels * (big.watts / 1000) * sunHours * CFG.performanceRatio) / dailyKWh) * 100));
       if (bigPct > fitPct) fixes.push({ title: `Use ${big.watts} W panels`, detail: `Higher-wattage panels raise coverage to about ${bigPct}%.`, action: { panelWatts: big.watts } });
     }
-    const elevated = Math.floor(layout.maxPanels * 1.3);
-    fixes.push({ title: 'Elevated structure', detail: `A raised steel frame over the full roof (and parapets) can fit around ${elevated} panels. Our engineer will confirm on site.` });
+    if (!site.elevated) {
+      const elev = roofLayout(roof, panel, { ...site, elevated: true }).maxPanels;
+      if (elev > layout.maxPanels) fixes.push({ title: 'Elevated steel structure', detail: `Raising the panels above the parapet, AC units and tank fits ${elev} panels on this roof.`, action: { elevated: true } });
+    }
   }
   const nonInvAC = (load.ac15?.qty || 0) + (load.ac1?.qty || 0);
   if (nonInvAC > 0 && (status !== 'ok')) {
@@ -233,7 +277,7 @@ export function computePlan(input) {
   }
 
   return {
-    city, panel, layout,
+    city, panel, layout, sunHours, season, site,
     loadKw, running, solarKw, sim,
     dailyKWh, peakW, requiredKW, panelsNeeded, areaNeeded,
     recommended: { inverterKW: recInverter, batteryKWh: recBattery, panels: panelsNeeded },
