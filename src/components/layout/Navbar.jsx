@@ -30,13 +30,17 @@ const Inner = styled.div`
   @media (max-width: 600px) { padding: 0 16px; height: 68px; }
 `;
 
+const NAV_BP = '1180px'; // below this width the links collapse into the menu
+
 const Brand = styled(Link)`
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-shrink: 0;
   text-decoration: none;
-  img { width: 46px; height: 46px; }
-  strong { display: block; font-family: ${fonts.heading}; font-weight: 800; font-size: 1.12rem; color: ${brand.navy}; line-height: 1.05; }
+  white-space: nowrap;
+  img { width: 46px; height: 46px; flex-shrink: 0; }
+  strong { display: block; white-space: nowrap; font-family: ${fonts.heading}; font-weight: 800; font-size: 1.12rem; color: ${brand.navy}; line-height: 1.05; }
   small { display: block; font-family: ${fonts.heading}; font-weight: 700; font-size: 0.62rem; letter-spacing: 0.32em; color: #fff;
     background: ${brand.blue}; padding: 2px 6px; border-radius: 3px; margin-top: 3px; width: fit-content; }
   @media (max-width: 380px) { img { width: 40px; height: 40px; } strong { font-size: 1rem; } }
@@ -62,9 +66,11 @@ const Links = styled.nav`
   a.play { color: #fff; background: linear-gradient(135deg, ${brand.blue}, ${brand.blueBright}); margin-left: 4px; }
   a.play:hover, a.play.active { color: #fff; background: ${brand.navy}; }
 
-  @media (max-width: 1024px) {
+  @media (max-width: 1360px) { a.link { padding: 8px 9px; font-size: 0.92rem; } }
+
+  @media (max-width: ${NAV_BP}) {
     position: fixed;
-    top: 68px;
+    top: 76px;
     left: 0;
     right: 0;
     flex-direction: column;
@@ -78,17 +84,20 @@ const Links = styled.nav`
     opacity: ${(p) => (p.$open ? 1 : 0)};
     transition: transform 0.3s ease, opacity 0.3s ease;
     a.link { padding: 14px 12px; font-size: 1.05rem; }
+    a.play { margin-left: 0; }
   }
+  @media (max-width: 600px) { top: 68px; }
 `;
 
 const Actions = styled.div`
   display: flex;
   align-items: center;
   gap: 10px;
-  .phone { display: flex; align-items: center; gap: 8px; color: ${brand.navy}; font-weight: 700; text-decoration: none; font-size: 0.92rem; }
+  .phone { display: flex; align-items: center; gap: 8px; color: ${brand.navy}; font-weight: 700; text-decoration: none; font-size: 0.92rem; white-space: nowrap; }
+  .cta { white-space: nowrap; }
   .phone svg { color: ${brand.blue}; }
   @media (max-width: 1360px) { .phone { display: none; } }
-  @media (max-width: 1024px) { .cta { display: none; } }
+  @media (max-width: ${NAV_BP}) { .cta { display: none; } }
 `;
 
 const MenuButton = styled.button`
@@ -101,12 +110,12 @@ const MenuButton = styled.button`
   color: ${brand.navy};
   font-size: 1.2rem;
   cursor: pointer;
-  @media (max-width: 1024px) { display: grid; place-items: center; }
+  @media (max-width: ${NAV_BP}) { display: grid; place-items: center; }
 `;
 
 const MobileCta = styled.div`
   display: none;
-  @media (max-width: 1024px) { display: flex; gap: 10px; margin-top: 10px; a { flex: 1; } }
+  @media (max-width: ${NAV_BP}) { display: flex; gap: 10px; margin-top: 10px; a { flex: 1; } }
 `;
 
 const NAV = [
