@@ -1,73 +1,32 @@
-import styled from 'styled-components';
-import { Link } from 'react-router-dom';
-import { colors } from '../styles/variables';
+import { useEffect } from 'react';
+import HeroSection from '../components/sections/HeroSection';
 import ServicesSection from '../components/sections/ServicesSection';
-import ProjectsSection from '../components/sections/ProjectsSection';
-import TestimonialsSection from '../components/sections/TestimonialsSection';
-import GallerySection from '../components/sections/GallerySection';
-import FAQSection from '../components/sections/FAQSection';
 import StatsSection from '../components/sections/StatsSection';
-import ScrollToTop from '../components/ui/ScrollToTop';
-import WhatsAppButton from '../components/ui/WhatsAppButton';
-import AboutSection from '../components/sections/AboutSection';
-
-const HeroSection = styled.section`
-  height: 100vh;
-  background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)),
-              url('https://via.placeholder.com/1920x1080') center/cover;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  color: ${colors.light};
-`;
-
-const HeroContent = styled.div`
-  h1 {
-    font-size: 48px;
-    margin-bottom: 20px;
-  }
-  p {
-    font-size: 20px;
-    margin-bottom: 30px;
-  }
-`;
-
-const CTAButton = styled(Link)`
-  display: inline-block;
-  padding: 12px 30px;
-  background: ${colors.primaryOrange};
-  color: ${colors.light};
-  text-decoration: none;
-  border-radius: 5px;
-  transition: 0.3s;
-
-  &:hover {
-    background: ${colors.primaryBlue};
-    transform: translateY(-2px);
-  }
-`;
+import PlannerPromo from '../components/sections/PlannerPromo';
+import ProjectsSection from '../components/sections/ProjectsSection';
+import ProcessSection from '../components/sections/ProcessSection';
+import LeadershipSection from '../components/sections/LeadershipSection';
+import TestimonialsSection from '../components/sections/TestimonialsSection';
+import FAQSection from '../components/sections/FAQSection';
+import ContactSection from '../components/sections/ContactSection';
+import CtaBand from '../components/sections/CtaBand';
+import { company } from '../content/company';
 
 function Home() {
+  useEffect(() => { document.title = `${company.name} | Solar Solutions for Homes & Businesses`; }, []);
   return (
     <>
-      <HeroSection>
-        <HeroContent>
-          <h1>Powering Tomorrow with Solar Energy</h1>
-          <p>Your trusted partner in renewable energy solutions</p>
-          <CTAButton to="/planner">Design my solar system</CTAButton>{' '}
-          <CTAButton to="/contact" style={{ background: 'transparent', border: '2px solid #fff' }}>Contact us</CTAButton>
-        </HeroContent>
-      </HeroSection>
+      <HeroSection />
       <ServicesSection />
       <StatsSection />
-      <ProjectsSection />
-      <GallerySection />
+      <PlannerPromo />
+      <ProjectsSection tone="soft" />
+      <LeadershipSection />
+      <ProcessSection />
       <TestimonialsSection />
-      <AboutSection />
       <FAQSection />
-      <ScrollToTop />
-      <WhatsAppButton />
+      <CtaBand />
+      <ContactSection />
     </>
   );
 }
