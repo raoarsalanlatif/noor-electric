@@ -3,7 +3,7 @@
 
 export const PLANNER_CONFIG = {
   // Company WhatsApp number in international format, digits only.
-  whatsappNumber: '923409566404',
+  whatsappNumber: '923421946568',
 
   // Pricing (indicative)
   costPerKW: 110000, // panels + inverter + structure + installation, per kW
