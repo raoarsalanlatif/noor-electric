@@ -5,15 +5,18 @@ export const img = (file) => `${import.meta.env.BASE_URL}images/${file}`;
 
 export const company = {
   name: 'Noor Electric Renewables',
+  legalName: 'Noor Electric (Pvt.) Ltd.',
   shortName: 'Noor Electric',
   tagline: 'Sunny skies, happy wallets',
   bio:
     'Empowering your home and business with reliable, cost-effective solar solutions. Explore customised packages designed around your energy needs and embrace a brighter, greener future.',
   phones: [
-    { label: 'Call / WhatsApp', display: '+92 340 9566404', tel: '+923409566404' },
-    { label: 'Site surveys', display: '+92 342 1946568', tel: '+923421946568' },
+    { label: 'Call / WhatsApp', display: '0342 1946568', tel: '+923421946568' },
+    { label: 'Alternate', display: '0340 9566404', tel: '+923409566404' },
   ],
-  whatsapp: '923409566404',
+  whatsapp: '923421946568',
+  yearsInBusiness: '4+',
+  projectsCompleted: '500+',
   address: {
     line1: 'Office No. 3, First Floor, Cantt Mall',
     line2: 'Saddar Road, Peshawar Cantonment',
@@ -40,11 +43,33 @@ export const ceo = {
   credential: 'Electrical Engineer',
   experience: '5+ years in solar',
   photo: img('ceo-rao-faizan-latif.jpg'),
+  photoPosition: 'center 30%',
+  linkedin: null,
+  facts: ['Electrical Engineer', '5+ years in solar', '500+ systems delivered'],
   bio: [
-    'Rao Faizan Latif is an electrical engineer with more than five years of experience in the solar industry. He leads Noor Electric Renewables with a simple belief: every home and business deserves a system that is sized correctly, built with quality components and installed safely.',
-    'Under his leadership the team delivers on-grid, hybrid and battery-backed systems across Peshawar, Islamabad and beyond, and handles net-metering paperwork so customers can start saving sooner.',
+    'Rao Faizan Latif is the Chief Executive Officer of Noor Electric (Pvt.) Ltd. An electrical engineer by training, he has spent more than five years designing, commissioning and maintaining solar power systems, and leads Noor Electric’s mission to bring engineering-grade solar to homes and businesses in Khyber Pakhtunkhwa and Islamabad.',
+    'He sets the company’s technical standards and leads system design, engineering quality and customer delivery. His approach is simple: size every system from the customer’s real load, use quality components, and install with proper protection and earthing so the system performs safely for decades.',
+    'Under his leadership Noor Electric has completed more than 500 domestic and commercial projects — from rooftop on-grid systems with net-metering to multi-inverter hybrid plants with lithium storage — and built a reputation for honest advice, clean workmanship and dependable after-sales support.',
   ],
+  focus: ['System design & engineering', 'Quality & safety standards', 'Commercial & industrial projects', 'Net-metering & utility liaison'],
 };
+
+export const director = {
+  name: 'Rao Arsalan Latif',
+  role: 'Director Operations & Board Member',
+  photo: img('director-rao-arsalan-latif.jpg'),
+  photoPosition: 'center 18%',
+  linkedin: 'https://www.linkedin.com/in/rao-arsalan-734057160/',
+  facts: ['Board Member', 'Director Operations', 'Technology & finance'],
+  bio: [
+    'Rao Arsalan Latif is a member of the Board and Director Operations at Noor Electric (Pvt.) Ltd. He oversees the business side of the company — procurement, supply chain, technology, marketing and customer financing — so that the engineering team can focus on delivering excellent installations.',
+    'He leads procurement strategy and supplier partnerships with tier-1 manufacturers of panels, inverters and lithium batteries, with a focus on genuine stock, competitive pricing and warranty-backed equipment for every customer. He also shapes the company’s financing options, making it easier for families and businesses to move to solar without a large upfront cost.',
+    'With more than five years of experience as a software engineer building high-scale fintech and digital platforms, he drives Noor Electric’s technology and marketing — from the online Solar Planner and digital quotations to the systems the team uses to manage projects, site visits and customer service.',
+  ],
+  focus: ['Procurement & supplier strategy', 'Technology & digital platforms', 'Marketing & brand growth', 'Customer financing & operations'],
+};
+
+export const leaders = [ceo, director];
 
 export const brands = ['Trina Solar', 'Solis', 'Inverex', 'Zilo', 'Dongjin', 'Narada'];
 
