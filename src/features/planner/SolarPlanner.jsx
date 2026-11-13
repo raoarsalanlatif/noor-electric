@@ -9,6 +9,8 @@ import Analytics from './Analytics';
 import BookingCard from './BookingCard';
 import { computePlan } from './sizing';
 import { DEFAULT_LOAD } from './appliances';
+import { CITIES, DEFAULT_SITE } from './config';
+import { sunPosition } from '../three/sun';
 import { Card, CardTitle, Button, Range, t, statusColor } from './ui';
 
 const RoofScene = lazy(() => import('./RoofScene'));
@@ -25,7 +27,7 @@ const Page = styled.div`
 const Hero = styled.header`
   max-width: 1400px;
   margin: 0 auto 22px;
-  h1 { font-size: clamp(1.7rem, 3.4vw, 2.6rem); margin: 0 0 6px; letter-spacing: -0.02em; }
+  h1 { font-size: clamp(1.7rem, 3.4vw, 2.6rem); margin: 0 0 6px; letter-spacing: -0.02em; color: ${t.text}; }
   h1 span { background: linear-gradient(90deg, ${t.orange}, #ffd36b); -webkit-background-clip: text; background-clip: text; color: transparent; }
   p { color: ${t.muted}; margin: 0; max-width: 680px; }
 `;
@@ -125,6 +127,28 @@ const TimeBar = styled.div`
   .clock { min-width: 74px; font-variant-numeric: tabular-nums; font-weight: 700; display: flex; gap: 6px; align-items: center; }
 `;
 
+const Crew = styled.div`
+  position: absolute;
+  left: 14px;
+  top: 70px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 6px 8px 6px 12px;
+  background: rgba(10,15,26,0.72);
+  backdrop-filter: blur(8px);
+  border: 1px solid ${t.line};
+  border-radius: 12px;
+  font-size: 0.8rem;
+  color: ${t.muted};
+  max-width: calc(100% - 28px);
+  b { color: ${t.text}; }
+  .label { margin-right: 4px; }
+  button { border: 1px solid ${t.line}; background: transparent; color: ${t.text}; border-radius: 8px; padding: 4px 9px; cursor: pointer; font-size: 0.78rem; }
+  button.on, button:hover { background: ${t.orange}; color: #111; border-color: ${t.orange}; }
+`;
+
 const Loading = styled.div`
   height: 100%; display: grid; place-items: center; color: ${t.muted};
 `;
@@ -165,22 +189,28 @@ const statusIcon = { ok: faCircleCheck, warn: faTriangleExclamation, fail: faCir
 
 export default function SolarPlanner() {
   const [load, setLoad] = useState(DEFAULT_LOAD);
-  const [cityId, setCityId] = useState('peshawar');
-  const [roof, setRoof] = useState({ width: 9, length: 12 });
+  const [location, setLocation] = useState(CITIES[0]);
+  const [season, setSeason] = useState('annual');
+  const [site, setSite] = useState(DEFAULT_SITE);
+  const [roof, setRoof] = useState({ width: 10, length: 14 });
+  const crewCtl = useRef({ speed: 1, skip: false, replay: 0 });
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const [speed, setSpeed] = useState(1);
+  const onProgress = useCallback((done, total) => setProgress({ done, total }), []);
   const [panelWatts, setPanelWatts] = useState(550);
   const [mode, setMode] = useState('auto');
   const [custom, setCustom] = useState({ panels: 12, inverterKW: 6, batteryKWh: 10 });
   const [withBattery, setWithBattery] = useState(false);
   const [offGrid, setOffGrid] = useState(false);
 
-  const clock = useRef({ hour: 11, playing: true });
-  const [hour, setHour] = useState(11);
+  const clock = useRef({ hour: 9, playing: true });
+  const [hour, setHour] = useState(9);
   const [playing, setPlaying] = useState(true);
   const onHour = useCallback((h) => setHour(h), []);
 
   const plan = useMemo(
-    () => computePlan({ load, cityId, roof, panelWatts, mode, custom, withBattery, offGrid }),
-    [load, cityId, roof, panelWatts, mode, custom, withBattery, offGrid],
+    () => computePlan({ load, location, season, site, roof, panelWatts, mode, custom, withBattery, offGrid }),
+    [load, location, season, site, roof, panelWatts, mode, custom, withBattery, offGrid],
   );
 
   const togglePlay = () => {
@@ -208,10 +238,13 @@ export default function SolarPlanner() {
     }
     if (action.inverterKW) setCustom((c) => ({ ...c, inverterKW: action.inverterKW }));
     if (action.batteryKWh) { setWithBattery(true); setCustom((c) => ({ ...c, batteryKWh: action.batteryKWh })); }
+    if (action.elevated) setSite((st) => ({ ...st, elevated: true }));
   };
 
   const k = hour % 24;
-  const night = k < 6 || k >= 18;
+  const night = sunPosition(location.lat, season, k + 0.5).alt < 0;
+  const setSpeedX = (x) => { crewCtl.current.speed = x; setSpeed(x); };
+  const installing = progress.done < progress.total;
 
   return (
     <Page>
@@ -224,7 +257,9 @@ export default function SolarPlanner() {
         <Side>
           <InputsPanel
             load={load} setLoad={setLoad}
-            cityId={cityId} setCityId={setCityId}
+            location={location} setLocation={setLocation}
+            season={season} setSeason={setSeason}
+            site={site} setSite={setSite}
             roof={roof} setRoof={setRoof}
             panelWatts={panelWatts} setPanelWatts={setPanelWatts}
             mode={mode} setMode={setMode}
@@ -237,7 +272,8 @@ export default function SolarPlanner() {
 
           <SceneWrap $status={plan.status}>
             <Suspense fallback={<Loading>Building your roof…</Loading>}>
-              <RoofScene plan={plan} roof={roof} clock={clock} onHour={onHour} />
+              <RoofScene plan={plan} roof={roof} site={site} lat={location.lat} season={season}
+                clock={clock} onHour={onHour} crewCtl={crewCtl} onProgress={onProgress} />
             </Suspense>
             <Banner $status={plan.status}>
               <div className="status"><FontAwesomeIcon icon={statusIcon[plan.status]} />{statusText[plan.status]}</div>
@@ -247,6 +283,19 @@ export default function SolarPlanner() {
                 {plan.sim.blackout[k] && <div style={{ color: '#fca5a5', fontWeight: 700 }}>{plan.sim.trip[k] ? 'Inverter tripped!' : 'Power cut — house is dark'}</div>}
               </div>
             </Banner>
+            <Crew>
+              <span className="label">
+                {installing ? <>Installing panel <b>{progress.done + 1}</b> of {progress.total}</> : plan.overflow > 0 ? <><b>{progress.total - plan.overflow}</b> installed · <b style={{ color: t.red }}>{plan.overflow}</b> fell off the roof</> : <><b>{progress.total}</b> panels installed</>}
+              </span>
+              {installing ? (
+                <>
+                  {[1, 2, 4].map((x) => <button key={x} type="button" className={speed === x ? 'on' : ''} onClick={() => setSpeedX(x)}>{x}×</button>)}
+                  <button type="button" onClick={() => { crewCtl.current.skip = true; }}>Skip</button>
+                </>
+              ) : (
+                <button type="button" onClick={() => { crewCtl.current.replay += 1; }}>Replay install</button>
+              )}
+            </Crew>
             <TimeBar>
               <button type="button" onClick={togglePlay} aria-label={playing ? 'Pause day' : 'Play day'}><FontAwesomeIcon icon={playing ? faPause : faPlay} /></button>
               <div className="clock"><FontAwesomeIcon icon={night ? faMoon : faSun} style={{ color: night ? '#a5b4fc' : t.orange }} />{fmtHour(k)}</div>
@@ -284,7 +333,7 @@ export default function SolarPlanner() {
           <Analytics plan={plan} hour={k} />
           <BookingCard plan={plan} />
           <p style={{ color: t.muted, fontSize: '0.78rem', margin: 0 }}>
-            Indicative estimate based on average sun hours for {plan.city.name} and typical appliance usage. Prices and tariffs are illustrative; final design is confirmed after a site survey.
+            Indicative estimate based on average sun hours for {plan.city.name} ({season === 'annual' ? 'year average' : season}) and typical appliance usage. Prices and tariffs are illustrative; final design is confirmed after a site survey.
           </p>
         </Main>
       </Layout>

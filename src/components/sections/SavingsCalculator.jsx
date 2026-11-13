@@ -72,7 +72,7 @@ const Results = styled.div`
 function SavingsCalculator() {
   const [monthlyBill, setMonthlyBill] = useState(200);
   const [sunlightHours, setSunlightHours] = useState(5);
-  const [electricityRate, setElectricityRate] = useState(0.12);
+  const [electricityRate] = useState(0.12);
 
   const calculateSavings = () => {
     const annualConsumption = (monthlyBill / electricityRate) * 12;

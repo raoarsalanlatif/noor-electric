@@ -8,6 +8,7 @@ import LoadingSpinner from './components/ui/LoadingSpinner';
 import WhatsAppButton from './components/ui/WhatsAppButton';
 
 const SolarPlanner = lazy(() => import('./features/planner/SolarPlanner'));
+const SolarRush = lazy(() => import('./features/game/SolarRush'));
 
 function App() {
   return (
@@ -23,6 +24,10 @@ function App() {
           <Route
             path="/planner"
             element={<Suspense fallback={<LoadingSpinner />}><SolarPlanner /></Suspense>}
+          />
+          <Route
+            path="/play"
+            element={<Suspense fallback={<LoadingSpinner />}><SolarRush /></Suspense>}
           />
           <Route path="*" element={<Home />} />
         </Routes>

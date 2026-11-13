@@ -10,6 +10,7 @@ import TestimonialsSection from '../components/sections/TestimonialsSection';
 import FAQSection from '../components/sections/FAQSection';
 import ContactSection from '../components/sections/ContactSection';
 import CtaBand from '../components/sections/CtaBand';
+import GamePromo from '../components/sections/GamePromo';
 import { company } from '../content/company';
 
 function Home() {
@@ -20,6 +21,7 @@ function Home() {
       <ServicesSection />
       <StatsSection />
       <PlannerPromo />
+      <GamePromo />
       <ProjectsSection tone="soft" />
       <LeadershipSection />
       <ProcessSection />
