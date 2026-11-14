@@ -3,6 +3,7 @@
 import { routes } from './_lib/routes.js';
 import { send, HttpError } from './_lib/http.js';
 import { isDbUnavailable, resetClient } from './_lib/db.js';
+import { HANDLED } from './_lib/content.js';
 
 export default async function handler(req, res) {
   const url = new URL(req.url, 'http://localhost');
@@ -29,6 +30,7 @@ export default async function handler(req, res) {
     }
     const [, id] = route.match(match.re) || [];
     const data = await match.handler(req, res, id, query);
+    if (data === HANDLED) return;
     send(res, 200, data ?? { ok: true });
   } catch (e) {
     if (isDbUnavailable(e)) {

@@ -22,7 +22,7 @@ function Home() {
       <StatsSection />
       <PlannerPromo />
       <GamePromo />
-      <ProjectsSection tone="soft" />
+      <ProjectsSection tone="soft" limit={3} />
       <LeadershipSection />
       <ProcessSection />
       <TestimonialsSection />

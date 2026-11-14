@@ -14,13 +14,13 @@ export function send(res, status, data, headers = {}) {
 }
 
 /** Parse a JSON body (Vercel may have parsed it already). Limits size to ~200 KB. */
-export async function readBody(req) {
+export async function readBody(req, limit = 200_000) {
   if (req.body && typeof req.body === 'object') return req.body;
   if (typeof req.body === 'string') { try { return JSON.parse(req.body || '{}'); } catch { throw bad('Invalid JSON'); } }
   const chunks = []; let size = 0;
   for await (const c of req) {
     size += c.length;
-    if (size > 200_000) throw new HttpError(413, 'Request too large');
+    if (size > limit) throw new HttpError(413, 'Request too large');
     chunks.push(c);
   }
   if (!chunks.length) return {};

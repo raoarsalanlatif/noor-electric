@@ -5,7 +5,7 @@ import styled from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faGauge, faFileInvoiceDollar, faCalendarDays, faTableColumns, faNewspaper, faUsers, faUserShield,
-  faRightFromBracket, faBars, faXmark, faKey, faArrowUpRightFromSquare,
+  faRightFromBracket, faBars, faXmark, faKey, faArrowUpRightFromSquare, faImages, faComments,
 } from '@fortawesome/free-solid-svg-icons';
 import { get, post, ApiError } from '../../lib/api';
 import { img } from '../../content/company';
@@ -18,6 +18,8 @@ import Board from './pages/Board';
 import Blog from './pages/Blog';
 import Team from './pages/Team';
 import Users from './pages/Users';
+import Showcase from './pages/Showcase';
+import Reviews from './pages/Reviews';
 
 
 const Shell = styled.div`
@@ -129,8 +131,10 @@ const NAV = [
   { to: 'quotes', label: 'Quotations', icon: faFileInvoiceDollar },
   { to: 'calendar', label: 'Calendar', icon: faCalendarDays },
   { to: 'projects', label: 'Projects', icon: faTableColumns },
+  { to: 'showcase', label: 'Website projects', icon: faImages, group: 'Website content' },
+  { to: 'reviews', label: 'Client reviews', icon: faComments },
   { to: 'blog', label: 'Blog', icon: faNewspaper },
-  { to: 'team', label: 'Team & salaries', icon: faUsers, owner: true },
+  { to: 'team', label: 'Team & salaries', icon: faUsers, owner: true, group: 'Owner only' },
   { to: 'users', label: 'Admin users', icon: faUserShield, owner: true },
 ];
 
@@ -176,9 +180,9 @@ export default function AdminApp() {
             <span><b>Noor Electric</b><small>Admin</small></span>
           </Link>
           {open && <button type="button" onClick={() => setOpen(false)} style={{ position: 'absolute', right: 14, top: 18, background: 'none', border: 0, color: '#fff', fontSize: '1.1rem' }} aria-label="Close menu"><FontAwesomeIcon icon={faXmark} /></button>}
-          {NAV.filter((n) => !n.owner || isOwner).map((n, i) => (
+          {NAV.filter((n) => !n.owner || isOwner).map((n) => (
             <span key={n.label}>
-              {i === 5 && <div className="group">Owner only</div>}
+              {n.group && <div className="group">{n.group}</div>}
               <NavLink to={n.to === '' ? '/admin' : `/admin/${n.to}`} end={n.end} className="nav" onClick={() => setOpen(false)}>
                 <FontAwesomeIcon icon={n.icon} />{n.label}
               </NavLink>
@@ -198,6 +202,8 @@ export default function AdminApp() {
             <Route path="calendar" element={<CalendarPage />} />
             <Route path="projects" element={<Board />} />
             <Route path="blog" element={<Blog />} />
+            <Route path="showcase" element={<Showcase />} />
+            <Route path="reviews" element={<Reviews />} />
             {isOwner && <Route path="team" element={<Team />} />}
             {isOwner && <Route path="users" element={<Users />} />}
             <Route path="*" element={<Navigate to="/admin" replace />} />

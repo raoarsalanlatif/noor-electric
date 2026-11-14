@@ -5,7 +5,8 @@ import { faLocationDot, faCircleCheck, faArrowRight, faBolt } from '@fortawesome
 import { faFacebookF } from '@fortawesome/free-brands-svg-icons';
 import { brand, fonts } from '../../styles/variables';
 import { projects, company } from '../../content/company';
-import { Section, Container, Eyebrow, Heading, Lead, SectionHead, ButtonA, Reveal } from '../ui/primitives';
+import { Section, Container, Eyebrow, Heading, Lead, SectionHead, ButtonA, ButtonLink, Reveal } from '../ui/primitives';
+import { usePublicContent, assetUrl } from '../../lib/publicContent';
 
 const Featured = styled.div`
   display: grid;
@@ -40,7 +41,8 @@ const Media = styled.div`
   .thumbs { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 6px; }
   .thumbs img { width: 52px; height: 52px; border-radius: 10px; border: 2px solid #fff; object-fit: cover; }
   .placeholder { position: absolute; inset: 0; display: grid; place-items: center; color: ${brand.gold}; font-size: 3.4rem; }
-  .placeholder span { display: block; font-family: ${fonts.heading}; color: #fff; font-size: 1.6rem; font-weight: 800; text-align: center; }
+  .placeholder > div { text-align: center; padding: 0 24px; }
+  .placeholder span { display: block; font-family: ${fonts.heading}; color: #fff; font-size: 1.45rem; font-weight: 800; text-align: center; margin-top: 10px; line-height: 1.25; }
 `;
 
 const Body = styled.div`
@@ -63,37 +65,48 @@ const More = styled.div`
   margin-top: 40px;
   display: flex;
   justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
 `;
 
 function ProjectCard({ p }) {
+  const image = assetUrl(p.image);
+  const gallery = (p.gallery || []).map(assetUrl).filter((g) => g && g !== image);
+  const highlights = p.highlights || [];
+  const specs = p.specs || [];
   return (
     <Card>
       <Media>
-        {p.image ? (
-          <img src={p.image} alt={`${p.title} — ${p.location}`} loading="lazy" />
+        {image ? (
+          <img src={image} alt={`${p.title}${p.location ? ` — ${p.location}` : ''}`} loading="lazy" />
         ) : (
-          <div className="placeholder"><div><FontAwesomeIcon icon={faBolt} /><span>10 kW<br />On-Grid</span></div></div>
+          <div className="placeholder"><div><FontAwesomeIcon icon={faBolt} /><span>{p.title}</span></div></div>
         )}
         <span className="tag"><FontAwesomeIcon icon={faCircleCheck} /> Project completed</span>
-        {p.gallery.length > 1 && (
+        {gallery.length > 0 && (
           <div className="thumbs">
-            {p.gallery.slice(1).map((g) => <img key={g} src={g} alt="" loading="lazy" />)}
+            {gallery.slice(0, 3).map((g) => <img key={g} src={g} alt="" loading="lazy" />)}
           </div>
         )}
       </Media>
       <Body>
-        <div className="loc"><FontAwesomeIcon icon={faLocationDot} />{p.location}</div>
+        {p.location && <div className="loc"><FontAwesomeIcon icon={faLocationDot} />{p.location}</div>}
         <h3>{p.title}</h3>
-        <ul className="hl">{p.highlights.map((h) => <li key={h}>{h}</li>)}</ul>
-        <dl>
-          {p.specs.map((s) => <div key={s.label}><dt>{s.label}</dt><dd>{s.value}</dd></div>)}
-        </dl>
+        {highlights.length > 0 && <ul className="hl">{highlights.map((h) => <li key={h}>{h}</li>)}</ul>}
+        {specs.length > 0 && (
+          <dl>
+            {specs.map((s) => <div key={s.label}><dt>{s.label}</dt><dd>{s.value}</dd></div>)}
+          </dl>
+        )}
       </Body>
     </Card>
   );
 }
 
-function ProjectsSection({ tone }) {
+function ProjectsSection({ tone, limit }) {
+  const all = usePublicContent('public/showcase', projects);
+  const list = limit ? all.slice(0, limit) : all;
+  if (!list.length) return null;
   return (
     <Section id="projects" $tone={tone}>
       <Container>
@@ -103,11 +116,14 @@ function ProjectsSection({ tone }) {
           <Lead>Real installations by our team — the same brands and build quality we’ll use on your roof.</Lead>
         </SectionHead>
         <Featured>
-          {projects.map((p, i) => (
-            <Reveal key={p.id} delay={i * 0.08}><ProjectCard p={p} /></Reveal>
+          {list.map((p, i) => (
+            <Reveal key={p._id || p.id || p.title} delay={(i % 3) * 0.08}><ProjectCard p={p} /></Reveal>
           ))}
         </Featured>
         <More>
+          {limit && all.length > limit && (
+            <ButtonLink to="/projects">View all {all.length} projects <FontAwesomeIcon icon={faArrowRight} /></ButtonLink>
+          )}
           <ButtonA href={company.socials.facebook} target="_blank" rel="noopener noreferrer" $variant="outline">
             <FontAwesomeIcon icon={faFacebookF} /> See more projects on Facebook <FontAwesomeIcon icon={faArrowRight} />
           </ButtonA>

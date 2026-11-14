@@ -61,6 +61,8 @@ export async function getDb() {
       db.collection('events').createIndex({ start: 1 }),
       db.collection('projects').createIndex({ stage: 1, order: 1 }),
       db.collection('payroll').createIndex({ month: 1, employeeId: 1 }, { unique: true }),
+      db.collection('showcase').createIndex({ published: 1, order: 1 }),
+      db.collection('reviews').createIndex({ published: 1, order: 1 }),
     ]).catch((e) => { indexesReady = null; console.error('index error', e.message); });
   }
   return db;
