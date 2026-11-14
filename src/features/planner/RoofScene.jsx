@@ -1,7 +1,7 @@
 /* eslint-disable react/prop-types, react/no-unknown-property */
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls, ContactShadows } from '@react-three/drei';
+import { OrbitControls, ContactShadows, Edges } from '@react-three/drei';
 import * as THREE from 'three';
 import { SkySystem, Neighbourhood } from '../three/Environment';
 import HouseModel from '../three/HouseModel';
@@ -10,7 +10,6 @@ import SolarPanelModel, { PanelLegs, PANEL_TILT } from '../three/SolarPanelModel
 import Worker from '../three/Worker';
 import { sunPosition } from '../three/sun';
 
-const ELEVATED_H = 2.6;
 
 /* ---------------------------------- clock --------------------------------- */
 function Clock({ clock, onHour }) {
@@ -25,11 +24,12 @@ function Clock({ clock, onHour }) {
 }
 
 /* ---------------------------------- panel --------------------------------- */
-function Panel({ index, slot, overflow, panel, installedRef, glow, site, roofTop, seed }) {
+function Panel({ index, slot, overflow, panel, installedRef, glow, structure, roofTop, seed }) {
   const g = useRef();
   const cells = useRef();
   const st = useRef({ phase: 'hidden', vy: 0, t: 0 });
-  const base = site.elevated ? ELEVATED_H : 0.25;
+  const elevated = structure.key === 'elevated';
+  const base = structure.frontH;
   const target = useMemo(
     () => [slot.x, roofTop + base + Math.sin(PANEL_TILT) * panel.length * 0.5, slot.z],
     [slot.x, slot.z, roofTop, base, panel.length],
@@ -69,7 +69,7 @@ function Panel({ index, slot, overflow, panel, installedRef, glow, site, roofTop
       <group rotation={[PANEL_TILT, 0, 0]}>
         <SolarPanelModel panel={panel} cellsRef={cells} />
       </group>
-      {!site.elevated && !overflow && (
+      {!elevated && !overflow && (
         <group position={[0, -(base + Math.sin(PANEL_TILT) * panel.length * 0.5), 0]}>
           <PanelLegs panel={panel} base={base} />
         </group>
@@ -80,13 +80,18 @@ function Panel({ index, slot, overflow, panel, installedRef, glow, site, roofTop
 
 /* ----------------------------- elevated frame ----------------------------- */
 function ElevatedFrame({ layout, roofTop, panel }) {
+  const ELEVATED_H = layout.structure.frontH;
   if (!layout.slots.length) return null;
   const xs = layout.slots.map((s) => s.x); const zs = layout.slots.map((s) => s.z);
   const minX = Math.min(...xs) - panel.width / 2; const maxX = Math.max(...xs) + panel.width / 2;
   const minZ = Math.min(...zs) - layout.depth / 2; const maxZ = Math.max(...zs) + layout.depth / 2;
   const cols = [];
   for (let x = minX; x <= maxX + 0.01; x += Math.max(2.4, (maxX - minX) / 4)) {
-    for (let z = minZ; z <= maxZ + 0.01; z += Math.max(2.6, (maxZ - minZ) / 3)) cols.push([x, z]);
+    for (let z = minZ; z <= maxZ + 0.01; z += Math.max(2.6, (maxZ - minZ) / 3)) {
+      // don't plant a column through a room, tank or AC
+      const blocked = layout.obstacles.some((o) => Math.abs(x - o.x) < o.w / 2 + 0.15 && Math.abs(z - o.z) < o.d / 2 + 0.15);
+      if (!blocked) cols.push([x, z]);
+    }
   }
   const steel = <meshStandardMaterial color="#8b95a1" metalness={0.7} roughness={0.35} />;
   return (
@@ -324,12 +329,15 @@ function Equipment({ roof, overloaded, socRef, hasBattery }) {
 }
 
 /* ------------------------------ camera rig ------------------------------- */
-function CameraRig({ roof, height, controls }) {
+function CameraRig({ roof, height, controls, editing }) {
   const { camera } = useThree();
   const dist = Math.max(roof.width, roof.length) * 1.05 + 13;
-  const target = useMemo(() => new THREE.Vector3(dist * 0.62, height + dist * 0.42, dist * 0.82), [dist, height]);
+  // the editor looks down onto the roof so items are easy to place and drag
+  const target = useMemo(() => (editing
+    ? new THREE.Vector3(dist * 0.12, height + dist * 0.92, dist * 0.5)
+    : new THREE.Vector3(dist * 0.62, height + dist * 0.42, dist * 0.82)), [dist, height, editing]);
   const moving = useRef(true);
-  useEffect(() => { moving.current = true; }, [dist, height]);
+  useEffect(() => { moving.current = true; }, [dist, height, editing]);
   useFrame(() => {
     if (!moving.current) return;
     camera.position.lerp(target, 0.05);
@@ -339,16 +347,120 @@ function CameraRig({ roof, height, controls }) {
   return null;
 }
 
+/* ------------------------------ roof editor ------------------------------ */
+// Click the roof to place the chosen item, drag items to move them. Red areas are where
+// panels can't go (the item, a walkway around it and its shadow); blue outlines are the
+// panel positions that remain for the current structure.
+function RoofEditor({ layout, roof, roofTop, tool, selectedId, onPlace, onSelect, onMoveItem, onDragChange }) {
+  const [drag, setDrag] = useState(null);
+  const setCursor = (c) => { document.body.style.cursor = c; };
+  useEffect(() => () => setCursor(''), []);
+  useEffect(() => { setCursor(tool ? 'copy' : ''); }, [tool]);
+  const endDrag = () => { if (!drag) return; setDrag(null); onDragChange(false); setCursor(tool ? 'copy' : ''); };
+  useEffect(() => {
+    if (!drag) return undefined;
+    window.addEventListener('pointerup', endDrag);
+    return () => window.removeEventListener('pointerup', endDrag);
+  });
+  const y = roofTop + 0.015;
+  const slotW = layout.colW - 0.08;
+  const slotD = layout.depth - 0.08;
+
+  return (
+    <group>
+      {/* placement surface */}
+      <mesh
+        position={[0, y, 0]} rotation={[-Math.PI / 2, 0, 0]}
+        onPointerDown={(e) => {
+          if (drag) return;
+          e.stopPropagation();
+          if (tool) onPlace(tool, e.point.x, e.point.z); else onSelect(null);
+        }}
+      >
+        <planeGeometry args={[roof.width, roof.length]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
+
+      {/* where panels can't go */}
+      {layout.keepOuts.map((k) => {
+        const x0 = Math.max(k.x0, -roof.width / 2); const x1 = Math.min(k.x1, roof.width / 2);
+        const z0 = Math.max(k.z0, -roof.length / 2); const z1 = Math.min(k.z1, roof.length / 2);
+        if (x1 <= x0 || z1 <= z0) return null;
+        return (
+          <mesh key={k.id} position={[(x0 + x1) / 2, y + 0.005, (z0 + z1) / 2]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
+            <planeGeometry args={[x1 - x0, z1 - z0]} />
+            <meshBasicMaterial color={k.shade ? '#f97316' : '#ef4444'} transparent opacity={0.28} depthWrite={false} />
+          </mesh>
+        );
+      })}
+
+      {/* panel spots that remain */}
+      {layout.slots.map((s, i) => (
+        <mesh key={i} position={[s.x, y + 0.01 + (layout.structure.key === 'elevated' ? layout.structure.frontH : 0), s.z]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
+          <planeGeometry args={[slotW, slotD]} />
+          <meshBasicMaterial color="#60a5fa" transparent opacity={layout.structure.key === 'elevated' ? 0.35 : 0.22} depthWrite={false} side={THREE.DoubleSide} />
+        </mesh>
+      ))}
+
+      {/* grab handles for each item */}
+      {layout.obstacles.map((o) => {
+        const base = roofTop + (o.onTop ? o.onTop + 0.16 : 0);
+        const selected = o.id === selectedId;
+        return (
+          <mesh
+            key={o.id}
+            position={[o.x, base + o.h / 2 + 0.02, o.z]}
+            onPointerOver={(e) => { e.stopPropagation(); if (!drag) setCursor('grab'); }}
+            onPointerOut={() => { if (!drag) setCursor(tool ? 'copy' : ''); }}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              onSelect(o.id);
+              setDrag({ id: o.id, dx: o.x - e.point.x, dz: o.z - e.point.z });
+              onDragChange(true);
+              setCursor('grabbing');
+            }}
+          >
+            <boxGeometry args={[o.w + 0.06, o.h + 0.06, o.d + 0.06]} />
+            <meshBasicMaterial transparent opacity={selected ? 0.12 : 0} color="#facc15" depthWrite={false} />
+            {selected && <Edges color="#facc15" lineWidth={2} />}
+          </mesh>
+        );
+      })}
+
+      {/* invisible floor that follows the pointer while dragging */}
+      {drag && (
+        <mesh
+          position={[0, roofTop, 0]} rotation={[-Math.PI / 2, 0, 0]}
+          onPointerMove={(e) => { e.stopPropagation(); onMoveItem(drag.id, e.point.x + drag.dx, e.point.z + drag.dz); }}
+          onPointerUp={(e) => { e.stopPropagation(); endDrag(); }}
+        >
+          <planeGeometry args={[400, 400]} />
+          <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+        </mesh>
+      )}
+      {/* small marker showing which way is south (the sun side) */}
+      <mesh position={[0, y + 0.02, roof.length / 2 - 0.35]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
+        <circleGeometry args={[0.22, 3]} />
+        <meshBasicMaterial color="#fbbf24" />
+      </mesh>
+    </group>
+  );
+}
+
 /* --------------------------------- scene --------------------------------- */
-function SceneContent({ plan, roof, site, lat, season, clock, onHour, crewCtl, onProgress }) {
+function SceneContent({ plan, roof, site, lat, season, clock, onHour, crewCtl, onProgress, editor }) {
+  const editing = Boolean(editor?.editing);
+  const [dragging, setDragging] = useState(false);
   const controls = useRef();
   const glow = useRef(0); const lit = useRef(0); const soc = useRef(50);
   const installedRef = useRef(0);
   const { layout, panel, chosen } = plan;
   const roofTop = houseHeight(site);
-  const failing = plan.overflow > 0;
+  const failing = plan.overflow > 0 && !editing;
   const overloaded = plan.issues.some((i) => i.type === 'inverter');
-  const base = site.elevated ? ELEVATED_H : 0.25;
+  const { structure } = plan;
+  const elevated = structure.key === 'elevated';
+  const base = structure.frontH;
 
   useFrame(() => {
     const h = clock.current.hour; const k = Math.floor(h) % 24;
@@ -369,23 +481,33 @@ function SceneContent({ plan, roof, site, lat, season, clock, onHour, crewCtl, o
     <>
       <Clock clock={clock} onHour={onHour} />
       <SkySystem clock={clock} lat={lat} season={season} shadowSize={Math.max(roof.width, roof.length) + 8} />
-      <CameraRig roof={roof} height={roofTop} controls={controls} />
-      <OrbitControls ref={controls} enablePan={false} minDistance={8} maxDistance={110} maxPolarAngle={Math.PI / 2.08} />
+      <CameraRig roof={roof} height={roofTop} controls={controls} editing={editing} />
+      <OrbitControls ref={controls} enabled={!dragging} enablePan={false} minDistance={8} maxDistance={110} maxPolarAngle={Math.PI / 2.08} />
 
       <Neighbourhood roof={roof} clock={clock} lat={lat} season={season} />
       <ContactShadows position={[0, 0.04, 0]} opacity={0.3} scale={70} blur={2.4} far={14} />
       <HouseModel roof={roof} site={site} obstacles={layout.obstacles} failing={failing} litRef={lit} />
-      {site.elevated && <ElevatedFrame layout={layout} roofTop={roofTop} panel={panel} />}
+      {elevated && !editing && <ElevatedFrame layout={layout} roofTop={roofTop} panel={panel} />}
+      {editing && (
+        <RoofEditor
+          layout={layout} roof={roof} roofTop={roofTop}
+          tool={editor.tool} selectedId={editor.selectedId}
+          onPlace={editor.onPlace} onSelect={editor.onSelect} onMoveItem={editor.onMoveItem}
+          onDragChange={setDragging}
+        />
+      )}
       <Equipment roof={roof} overloaded={overloaded} socRef={soc} hasBattery={chosen.batteryKWh > 0} />
 
-      {targets.map((t, i) => (
+      {!editing && targets.map((t, i) => (
         <Panel key={i} index={i} slot={t.slot} overflow={t.overflow} panel={panel} installedRef={installedRef}
-          glow={glow} site={site} roofTop={roofTop} seed={i * 7 + 3} />
+          glow={glow} structure={structure} roofTop={roofTop} seed={i * 7 + 3} />
       ))}
+      {!editing && (
       <InstallCrew
         targets={targets} panel={panel} roof={roof} roofTop={roofTop} parapetH={site.parapetH}
         installedRef={installedRef} ctl={crewCtl} onProgress={onProgress} depth={layout.depth}
       />
+      )}
     </>
   );
 }

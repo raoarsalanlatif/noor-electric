@@ -82,7 +82,7 @@ export default function Analytics({ plan, hour }) {
           <Bar100 $pct={cov} $color={covTone}><div /></Bar100>
         </Kpi>
         <Kpi $tone={t.green}><div className="k">Monthly saving</div><div className="v">{pkr(plan.monthlySaving)}</div><div className="s">Bill {pkr(plan.billBefore)} → {pkr(plan.billAfter)}</div></Kpi>
-        <Kpi><div className="k">Est. cost</div><div className="v">{pkr(plan.cost)}</div><div className="s">Payback {plan.paybackYears ? `${plan.paybackYears.toFixed(1)} yrs` : '—'}</div></Kpi>
+        <Kpi><div className="k">Est. cost</div><div className="v">{pkr(plan.cost)}</div><div className="s">Incl. {plan.structure.short} structure {pkr(plan.structureCost)} · payback {plan.paybackYears ? `${plan.paybackYears.toFixed(1)} yrs` : '—'}</div></Kpi>
         <Kpi><div className="k">CO₂ avoided</div><div className="v">{plan.co2TonsYear.toFixed(1)} t</div><div className="s">per year</div></Kpi>
       </Kpis>
 

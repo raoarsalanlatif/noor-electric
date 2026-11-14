@@ -4,7 +4,7 @@ import styled from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCalendarCheck, faCircleCheck } from '@fortawesome/free-solid-svg-icons';
 import { Card, CardTitle, TextInput, Button, Label, t } from './ui';
-import { PLANNER_CONFIG } from './config';
+import { PLANNER_CONFIG, ROOF_ITEMS } from './config';
 import { post } from '../../lib/api';
 
 const Form = styled.form`
@@ -26,6 +26,17 @@ const Done = styled.div`
 const Error = styled.div` color: #fca5a5; font-size: 0.85rem; `;
 
 
+/** e.g. "1 stair room / room, 2 AC outdoor units, 1 water tank (on the room)" */
+function describeRoofItems(obstacles = []) {
+  if (!obstacles.length) return 'Clear roof';
+  const counts = {};
+  obstacles.forEach((o) => {
+    const key = `${(ROOF_ITEMS[o.type] || ROOF_ITEMS.other).label.toLowerCase()}${o.onTop ? ' on the room' : ''}`;
+    counts[key] = (counts[key] || 0) + 1;
+  });
+  return Object.entries(counts).map(([k, n]) => `${n} × ${k}`).join(', ');
+}
+
 function summary(plan, form) {
   const lines = [
     'Site visit request — Noor Electric Solar Planner',
@@ -36,7 +47,9 @@ function summary(plan, form) {
     '',
     `City: ${plan.city.name}`,
     `Daily use: ${plan.dailyKWh.toFixed(1)} kWh, peak ${(plan.peakW / 1000).toFixed(1)} kW`,
-    `Roof: ${Math.round(plan.layout.roofArea)} m² (fits ${plan.layout.maxPanels} panels)`,
+    `Roof: ${Math.round(plan.layout.roofArea)} m², ${plan.site.storeys} storey(s), parapet ${plan.site.parapetH ? `${Math.round(plan.site.parapetH / 0.3048)} ft` : 'none'}`,
+    `On the roof: ${describeRoofItems(plan.layout.obstacles)}`,
+    `Structure: ${plan.structure.label}${plan.structureAuto ? ' (auto)' : ''} — fits ${plan.layout.maxPanels} panels`,
     `Design: ${plan.chosen.panels} × ${plan.panel.watts} W, ${plan.chosen.inverterKW} kW inverter, ${plan.chosen.batteryKWh} kWh battery`,
     `Status: ${plan.status.toUpperCase()}${plan.issues.length ? ` — ${plan.issues.map((i) => i.title).join(', ')}` : ''}`,
   ];
@@ -65,7 +78,7 @@ export default function BookingCard({ plan }) {
       area: form.area,
       city: plan.city.name,
       preferredDate: form.date,
-      systemType: `${plan.systemKW.toFixed(1)} kW ${plan.chosen.batteryKWh ? 'hybrid' : 'on-grid'}`,
+      systemType: `${plan.systemKW.toFixed(1)} kW ${plan.chosen.batteryKWh ? 'hybrid' : 'on-grid'} · ${plan.structure.short}`,
       monthlyBill: Math.round(plan.billBefore),
       plan: {
         summary: text,
@@ -76,6 +89,8 @@ export default function BookingCard({ plan }) {
         dailyKWh: Number(plan.dailyKWh.toFixed(1)),
         status: plan.status,
         estimatedCost: Math.round(plan.cost),
+        structure: plan.structure.label,
+        roofItems: describeRoofItems(plan.layout.obstacles),
       },
     }).catch(() => {});
     setSent(true);
