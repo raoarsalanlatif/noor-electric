@@ -1,4 +1,5 @@
 import { getDb, oid } from './db.js';
+import { contentRoutes } from './content.js';
 import { requireUser, issueSession, clearSession, hashPassword, checkPassword, publicUser } from './auth.js';
 import {
   HttpError, bad, notFound, readBody, clientIp, rateLimit, str, num, bool, oneOf, date, strList,
@@ -599,4 +600,6 @@ export const routes = [
   R('POST', 'public/quotes', (req) => publicCreateQuote(req)),
   R('GET', 'public/blogs', () => publicBlogs()),
   R('GET', 'public/blogs/:id', (req, res, slug) => publicBlog(slug)),
+
+  ...contentRoutes,
 ];
