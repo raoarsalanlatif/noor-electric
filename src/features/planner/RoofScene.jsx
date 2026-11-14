@@ -328,6 +328,18 @@ function Equipment({ roof, overloaded, socRef, hasBattery }) {
   );
 }
 
+/* ------------------------------- snapshot -------------------------------- */
+// Lets the page grab the current 3D view as a JPEG (for the downloadable report).
+function Snapshot({ captureRef }) {
+  const { gl, scene, camera } = useThree();
+  useEffect(() => {
+    if (!captureRef) return undefined;
+    captureRef.current = () => { gl.render(scene, camera); return gl.domElement.toDataURL('image/jpeg', 0.92); };
+    return () => { captureRef.current = null; };
+  }, [gl, scene, camera, captureRef]);
+  return null;
+}
+
 /* ------------------------------ camera rig ------------------------------- */
 function CameraRig({ roof, height, controls, editing }) {
   const { camera } = useThree();
@@ -448,7 +460,7 @@ function RoofEditor({ layout, roof, roofTop, tool, selectedId, onPlace, onSelect
 }
 
 /* --------------------------------- scene --------------------------------- */
-function SceneContent({ plan, roof, site, lat, season, clock, onHour, crewCtl, onProgress, editor }) {
+function SceneContent({ plan, roof, site, lat, season, clock, onHour, crewCtl, onProgress, editor, captureRef }) {
   const editing = Boolean(editor?.editing);
   const [dragging, setDragging] = useState(false);
   const controls = useRef();
@@ -480,6 +492,7 @@ function SceneContent({ plan, roof, site, lat, season, clock, onHour, crewCtl, o
   return (
     <>
       <Clock clock={clock} onHour={onHour} />
+      <Snapshot captureRef={captureRef} />
       <SkySystem clock={clock} lat={lat} season={season} shadowSize={Math.max(roof.width, roof.length) + 8} />
       <CameraRig roof={roof} height={roofTop} controls={controls} editing={editing} />
       <OrbitControls ref={controls} enabled={!dragging} enablePan={false} minDistance={8} maxDistance={110} maxPolarAngle={Math.PI / 2.08} />
