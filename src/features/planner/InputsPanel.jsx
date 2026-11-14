@@ -2,9 +2,10 @@
 import { useState } from 'react';
 import styled from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faMinus, faPlus, faPlug, faRulerCombined, faSolarPanel, faLocationCrosshairs } from '@fortawesome/free-solid-svg-icons';
+import { faMinus, faPlus, faPlug, faRulerCombined, faSolarPanel, faLocationCrosshairs, faPenRuler, faXmark, faCheck } from '@fortawesome/free-solid-svg-icons';
 import { APPLIANCES } from './appliances';
-import { CITIES, PANEL_OPTIONS, INVERTER_SIZES, nearestCity } from './config';
+import { CITIES, PANEL_OPTIONS, INVERTER_SIZES, nearestCity, ROOF_ITEMS } from './config';
+import { ITEM_ICONS } from './RoofEditorUI';
 import { SEASONS } from '../three/sun';
 import { Card, Label, Range, NumberInput, Select, Segmented, Seg, Toggle, Row, t } from './ui';
 
@@ -147,6 +148,72 @@ function LoadTab({ load, setLoad, plan }) {
   );
 }
 
+const Items = styled.ul`
+  list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px;
+  li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; background: ${t.bg}; border: 1px solid ${t.line}; font-size: 0.86rem; color: ${t.text}; }
+  li svg { color: ${t.orange}; width: 16px; }
+  li small { color: ${t.muted}; margin-left: auto; }
+  li button { border: 0; background: none; color: ${t.muted}; cursor: pointer; padding: 2px 4px; }
+  li button:hover { color: #fca5a5; }
+`;
+
+const QuickAdd = styled.div`
+  display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px;
+  button { display: inline-flex; align-items: center; gap: 6px; border: 1px dashed ${t.line}; background: transparent; color: ${t.muted};
+    border-radius: 9px; padding: 6px 9px; cursor: pointer; font-size: 0.78rem; }
+  button:hover { color: ${t.text}; border-color: ${t.orange}; }
+`;
+
+const EditRoof = styled.button`
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 6px;
+  border: 0; border-radius: 12px; padding: 11px; cursor: pointer; font-weight: 700; font-size: 0.9rem;
+  background: ${t.orange}; color: #111;
+`;
+
+const StructTable = styled.div`
+  display: grid; gap: 6px; margin-top: 8px;
+  button { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; text-align: left; cursor: pointer;
+    border: 1px solid ${t.line}; background: ${t.bg}; color: ${t.text}; border-radius: 11px; padding: 9px 11px; font: inherit; }
+  button.on { border-color: ${t.orange}; background: ${t.orange}14; }
+  b { font-size: 0.9rem; display: flex; align-items: center; gap: 6px; }
+  small { color: ${t.muted}; font-size: 0.76rem; }
+  .fit { text-align: right; font-weight: 700; font-size: 0.86rem; }
+  .tag { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 6px; border-radius: 6px; background: ${t.green}22; color: ${t.green}; }
+`;
+
+const pkrShort = (n) => (n >= 100000 ? `Rs ${(n / 100000).toFixed(n >= 1000000 ? 1 : 2)} lac` : `Rs ${Math.round(n / 1000)}k`);
+
+function StructurePicker({ site, setSite, plan }) {
+  const auto = plan.structureAuto;
+  const choose = (key) => setSite({ ...site, structure: key });
+  const bestKey = plan.structureOptions.find((o) => o.fits)?.key;
+  return (
+    <Field>
+      <Label>Mounting structure</Label>
+      <Segmented>
+        <Seg type="button" $active={auto} onClick={() => choose('auto')}>Auto</Seg>
+        {plan.structureOptions.map((o) => <Seg key={o.key} type="button" $active={!auto && plan.structure.key === o.key} onClick={() => choose(o.key)}>{o.short}</Seg>)}
+      </Segmented>
+      <StructTable>
+        {plan.structureOptions.map((o) => (
+          <button key={o.key} type="button" className={plan.structure.key === o.key ? 'on' : ''} onClick={() => choose(o.key)}>
+            <b>{o.label}{o.key === bestKey && <span className="tag">Best value</span>}</b>
+            <span className="fit" style={{ color: o.fits ? t.green : t.amber }}>{o.maxPanels} panels{o.fits ? <> <FontAwesomeIcon icon={faCheck} /></> : ''}</span>
+            <small>{o.desc}</small>
+            <small style={{ textAlign: 'right' }}>{pkrShort(o.cost)}</small>
+          </button>
+        ))}
+      </StructTable>
+      <Hint>
+        {auto
+          ? <>Auto picks the cheapest structure that fits the {plan.chosen.panels} panels you need — now <b style={{ color: t.text }}>{plan.structure.label}</b>.</>
+          : <>You chose <b style={{ color: t.text }}>{plan.structure.label}</b>. Switch to Auto to let us pick.</>}
+        {' '}Structure prices are indicative, per your system size.
+      </Hint>
+    </Field>
+  );
+}
+
 const SubHead = styled.h4`
   font-size: 0.72rem;
   letter-spacing: 0.1em;
@@ -174,7 +241,7 @@ const GpsButton = styled.button`
   &:hover { border-color: ${t.orange}; }
 `;
 
-function SiteTab({ location, setLocation, season, setSeason, site, setSite, roof, setRoof, panelWatts, setPanelWatts, plan }) {
+function SiteTab({ location, setLocation, season, setSeason, site, setSite, roof, setRoof, panelWatts, setPanelWatts, plan, onEditRoof, onAddItem, onRemoveItem }) {
   const [gps, setGps] = useState('');
   const dim = (key, label) => (
     <Field>
@@ -238,26 +305,32 @@ function SiteTab({ location, setLocation, season, setSeason, site, setSite, roof
         </Segmented>
         <Hint>Taller walls shade the panels next to them, so we keep a wider gap.</Hint>
       </Field>
-      <Toggle>
-        <span>Stair room (mumty)<small>Takes a corner of the roof</small></span>
-        <input type="checkbox" checked={site.stairRoom} onChange={(e) => set({ stairRoom: e.target.checked })} />
-      </Toggle>
-      <Toggle>
-        <span>Water tank<small>{site.stairRoom ? 'Sits on top of the stair room' : 'Sits on the roof'}</small></span>
-        <input type="checkbox" checked={site.tank} onChange={(e) => set({ tank: e.target.checked })} />
-      </Toggle>
-      <Row $justify="space-between" style={{ padding: '8px 0' }}>
-        <span style={{ color: t.text, fontSize: '0.92rem' }}>AC outdoor units on roof</span>
-        <Stepper>
-          <button type="button" aria-label="Fewer AC units" onClick={() => set({ acUnits: Math.max(0, site.acUnits - 1) })}><FontAwesomeIcon icon={faMinus} /></button>
-          <b>{site.acUnits}</b>
-          <button type="button" aria-label="More AC units" onClick={() => set({ acUnits: Math.min(6, site.acUnits + 1) })}><FontAwesomeIcon icon={faPlus} /></button>
-        </Stepper>
-      </Row>
-      <Toggle>
-        <span>Elevated steel structure<small>Raises panels above walls, ACs and tank</small></span>
-        <input type="checkbox" checked={site.elevated} onChange={(e) => set({ elevated: e.target.checked })} />
-      </Toggle>
+
+      <SubHead>On your roof</SubHead>
+      <Hint style={{ marginTop: -4, marginBottom: 8 }}>Add the water tanks, rooms, AC units and anything else on your roof — then drag them to where they really are.</Hint>
+      {(plan.layout.obstacles || []).length > 0 ? (
+        <Items>
+          {plan.layout.obstacles.map((o) => {
+            const def = ROOF_ITEMS[o.type] || ROOF_ITEMS.other;
+            return (
+              <li key={o.id}>
+                <FontAwesomeIcon icon={ITEM_ICONS[o.type] || ITEM_ICONS.other} />
+                <span>{def.label}{o.onTop ? ' (on the room)' : ''}</span>
+                <small>{o.type === 'tank' ? `Ø${o.w.toFixed(1)}` : `${o.w.toFixed(1)}×${o.d.toFixed(1)}`} × {o.h.toFixed(1)} m</small>
+                <button type="button" aria-label={`Remove ${def.label}`} onClick={() => onRemoveItem(o.id)}><FontAwesomeIcon icon={faXmark} /></button>
+              </li>
+            );
+          })}
+        </Items>
+      ) : <Hint>Nothing on the roof yet — a clear roof fits the most panels.</Hint>}
+      <QuickAdd>
+        {Object.entries(ROOF_ITEMS).map(([key, it]) => (
+          <button key={key} type="button" onClick={() => onAddItem(key)}><FontAwesomeIcon icon={faPlus} /> {it.short}</button>
+        ))}
+      </QuickAdd>
+      <EditRoof type="button" onClick={onEditRoof}><FontAwesomeIcon icon={faPenRuler} /> Arrange my roof in 3D</EditRoof>
+
+      <StructurePicker site={site} setSite={setSite} plan={plan} />
 
       <Total style={{ marginTop: 12 }}>
         <span>Roof area {Math.round(plan.layout.roofArea)} m²</span>

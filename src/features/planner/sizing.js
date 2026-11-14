@@ -1,5 +1,5 @@
 import { APPLIANCE_MAP, PROFILES } from './appliances';
-import { PLANNER_CONFIG as CFG, PANEL_OPTIONS, INVERTER_SIZES, CITIES, DEFAULT_SITE } from './config';
+import { PLANNER_CONFIG as CFG, PANEL_OPTIONS, INVERTER_SIZES, CITIES, DEFAULT_SITE, STRUCTURES, STRUCTURE_ORDER } from './config';
 import { dailyShape, SEASONS } from '../three/sun';
 
 const TILT = (15 * Math.PI) / 180;
@@ -49,45 +49,66 @@ export function solarShape(sunHours, lat = 32, season = 'annual') {
   return dailyShape(lat, season).map((w) => w * sunHours);
 }
 
-/** Things standing on the roof, in roof coordinates (origin at roof centre, +z = front/south). */
+/**
+ * Things standing on the roof, in roof coordinates (origin at roof centre, +x = east, +z = front/south).
+ * Items are clamped inside the roof; a tank (or other small item) placed on a room sits on top of it.
+ */
 export function roofObstacles(roof, site = DEFAULT_SITE) {
   const W = roof.width; const L = roof.length;
-  const out = [];
-  if (site.stairRoom) {
-    const w = Math.min(3, W * 0.45); const d = Math.min(3.4, L * 0.45);
-    out.push({ type: 'stairRoom', x: -W / 2 + 0.2 + w / 2, z: -L / 2 + 0.2 + d / 2, w, d, h: 2.7, margin: site.elevated ? 0.2 : 0.6 });
-  }
-  let acStart = W / 2 - 0.8;
-  if (site.tank) {
-    if (site.stairRoom) {
-      const sr = out[0];
-      out.push({ type: 'tank', x: sr.x, z: sr.z, w: 1.2, d: 1.2, h: 1.3, onTop: 2.7, margin: 0 });
-    } else {
-      out.push({ type: 'tank', x: W / 2 - 1.1, z: -L / 2 + 1.1, w: 1.2, d: 1.2, h: 1.3, margin: site.elevated ? -9 : 0.4 });
-      acStart -= 1.8;
-    }
-  }
-  for (let i = 0; i < (site.acUnits || 0); i++) {
-    out.push({ type: 'ac', x: acStart - i * 1.25, z: -L / 2 + 0.45, w: 0.9, d: 0.38, h: 0.62, margin: site.elevated ? -9 : 0.15 });
-  }
-  return out;
+  const items = (site.items || []).map((it) => {
+    const w = Math.min(Math.max(0.2, it.w), W); const d = Math.min(Math.max(0.2, it.d), L);
+    return {
+      ...it, w, d, h: Math.max(0.1, it.h),
+      x: Math.min(W / 2 - w / 2, Math.max(-W / 2 + w / 2, it.x)),
+      z: Math.min(L / 2 - d / 2, Math.max(-L / 2 + d / 2, it.z)),
+    };
+  });
+  const rooms = items.filter((o) => o.type === 'room');
+  return items.map((o) => {
+    if (o.type === 'room') return { ...o, onTop: 0, top: o.h };
+    const host = rooms.find((r) => Math.abs(o.x - r.x) < r.w / 2 && Math.abs(o.z - r.z) < r.d / 2 && o.w <= r.w && o.d <= r.d);
+    const onTop = host ? host.h : 0;
+    return { ...o, onTop, top: (host ? onTop + 0.16 : 0) + o.h };
+  });
 }
 
-export function roofLayout(roof, panel, site = DEFAULT_SITE) {
+/** Area each obstacle keeps free of panels for a given structure (its footprint + walkway + shadow). */
+export function keepOutZones(obstacles, structure) {
+  const elevated = structure.key === 'elevated';
+  return obstacles.map((o) => {
+    // an elevated structure spans over anything comfortably below its frame
+    if (elevated && o.top < structure.frontH - 0.25) return null;
+    const above = Math.max(0, o.top - structure.frontH); // how far it rises above the panels
+    const gap = elevated ? 0.2 : CFG.accessGap;
+    const side = gap + above * CFG.shadeSide;
+    return {
+      id: o.id,
+      x0: o.x - o.w / 2 - side,
+      x1: o.x + o.w / 2 + side,
+      z0: o.z - o.d / 2 - gap - above * CFG.shadeNorth, // shadow falls to the north (behind)
+      z1: o.z + o.d / 2 + gap,
+      shade: above > 0.05,
+    };
+  }).filter(Boolean);
+}
+
+export function roofLayout(roof, panel, site = DEFAULT_SITE, structureKey = 'L2') {
+  const structure = STRUCTURES[structureKey] || STRUCTURES.L2;
+  const elevated = structure.key === 'elevated';
   const depth = panel.length * Math.cos(TILT);
   const pitch = depth + 0.6;
   const colW = panel.width + CFG.panelGap;
-  const ph = site.parapetH || 0;
-  // parapet walls shade the panels behind them, mostly on the sunny (front) side
-  const sFront = site.elevated ? 0.3 : Math.max(CFG.roofSetback, 0.3 + ph * 1.6);
-  const sOther = site.elevated ? 0.3 : Math.max(CFG.roofSetback, 0.3 + ph * 0.8);
+  // parapet walls shade the panels behind them, mostly on the sunny (front) side;
+  // a higher frame clears more of the wall, an elevated one clears it completely
+  const wallAbove = elevated ? 0 : Math.max(0, (site.parapetH || 0) - structure.frontH);
+  const sFront = elevated ? 0.3 : Math.max(CFG.roofSetback, 0.3 + wallAbove * 1.6);
+  const sOther = elevated ? 0.3 : Math.max(CFG.roofSetback, 0.3 + wallAbove * 0.8);
   const usableW = Math.max(0, roof.width - 2 * sOther);
   const cols = Math.max(0, Math.floor(usableW / colW));
   const startX = -((cols - 1) * colW) / 2;
   const obstacles = roofObstacles(roof, site);
-  const hits = (x, z) => obstacles.some((o) => o.margin > -5 && !o.onTop
-    && Math.abs(x - o.x) < (colW + o.w) / 2 + o.margin
-    && Math.abs(z - o.z) < (depth + o.d) / 2 + o.margin);
+  const keepOuts = keepOutZones(obstacles, structure);
+  const hits = (x, z) => keepOuts.some((k) => x + colW / 2 > k.x0 && x - colW / 2 < k.x1 && z + depth / 2 > k.z0 && z - depth / 2 < k.z1);
 
   const slots = [];
   let rows = 0;
@@ -105,12 +126,27 @@ export function roofLayout(roof, panel, site = DEFAULT_SITE) {
     z: roof.length / 2 + 0.4 + depth / 2 + Math.floor(k / ovCols) * pitch,
   });
   return {
-    cols, rows, pitch, colW, depth, sFront, sOther,
-    slots, obstacles, overflowSlot,
+    structure, cols, rows, pitch, colW, depth, sFront, sOther,
+    slots, obstacles, keepOuts, overflowSlot,
     maxPanels: slots.length,
     footprint: pitch * colW,
     roofArea: roof.width * roof.length,
   };
+}
+
+/**
+ * Compare all structures for this roof and pick one.
+ * 'auto' = the cheapest structure that fits the panels we need; if none fits, the one that fits the most.
+ */
+export function chooseStructure(roof, panel, site, panelsWanted) {
+  const options = STRUCTURE_ORDER.map((key) => {
+    const layout = roofLayout(roof, panel, site, key);
+    return { key, structure: STRUCTURES[key], layout, maxPanels: layout.maxPanels, fits: layout.maxPanels >= panelsWanted };
+  });
+  const best = options.find((o) => o.fits)
+    || options.reduce((a, b) => (b.maxPanels > a.maxPanels ? b : a), options[0]);
+  const picked = site.structure && site.structure !== 'auto' ? options.find((o) => o.key === site.structure) || best : best;
+  return { picked, best, options };
 }
 
 const pickInverter = (kw) => INVERTER_SIZES.find((s) => s >= kw) || INVERTER_SIZES[INVERTER_SIZES.length - 1];
@@ -171,7 +207,10 @@ export function computePlan(input) {
 
   const requiredKW = dailyKWh / (sunHours * CFG.performanceRatio);
   const panelsNeeded = Math.ceil((requiredKW * 1000) / panel.watts);
-  const layout = roofLayout(roof, panel, site);
+  const panelsWanted = mode === 'custom' ? custom.panels : panelsNeeded;
+  const structurePick = chooseStructure(roof, panel, site, panelsWanted);
+  const { layout } = structurePick.picked;
+  const structure = layout.structure;
   const areaNeeded = panelsNeeded * layout.footprint + 2 * CFG.roofSetback * (roof.width + roof.length);
 
   // energy the battery must cover = load not served directly by sun (assuming a right-sized array)
@@ -205,7 +244,8 @@ export function computePlan(input) {
   const billBefore = dailyKWh * 30 * CFG.tariffPerKWh;
   const billAfter = Math.max(0, gridKWh * 30 * CFG.tariffPerKWh - exportKWh * 30 * CFG.exportRatePerKWh);
   const monthlySaving = billBefore - billAfter;
-  const cost = systemKW * CFG.costPerKW + chosen.batteryKWh * CFG.batteryCostPerKWh;
+  const structureCost = systemKW * structure.costPerKW;
+  const cost = systemKW * CFG.costPerKW + structureCost + chosen.batteryKWh * CFG.batteryCostPerKWh;
   const paybackYears = monthlySaving > 0 ? cost / (monthlySaving * 12) : null;
   const co2TonsYear = ((dailyKWh - gridKWh) * 365 * CFG.gridEmissionKgPerKWh) / 1000;
 
@@ -249,15 +289,21 @@ export function computePlan(input) {
   if (overflow > 0) {
     const fitPct = Math.min(100, Math.round(((layout.maxPanels * prodPerPanel) / dailyKWh) * 100));
     fixes.push({ title: `Best fit: ${layout.maxPanels} panel${layout.maxPanels === 1 ? '' : 's'}`, detail: `${round((layout.maxPanels * panel.watts) / 1000)} kW on this roof covers about ${fitPct}% of your use.` });
+    const better = structurePick.options.filter((o) => o.key !== structure.key && o.maxPanels > layout.maxPanels);
+    better.forEach((o) => {
+      fixes.push({
+        title: `Use an ${o.structure.label}`,
+        detail: o.fits
+          ? `${o.structure.desc}. Fits all ${chosen.panels} panels on this roof (${o.maxPanels} possible).`
+          : `${o.structure.desc}. Fits ${o.maxPanels} panels instead of ${layout.maxPanels}.`,
+        action: { structure: o.key },
+      });
+    });
     const big = PANEL_OPTIONS[PANEL_OPTIONS.length - 1];
     if (big.watts !== panel.watts) {
-      const bigLayout = roofLayout(roof, big, site);
+      const bigLayout = roofLayout(roof, big, site, structure.key);
       const bigPct = Math.min(100, Math.round(((bigLayout.maxPanels * (big.watts / 1000) * sunHours * CFG.performanceRatio) / dailyKWh) * 100));
       if (bigPct > fitPct) fixes.push({ title: `Use ${big.watts} W panels`, detail: `Higher-wattage panels raise coverage to about ${bigPct}%.`, action: { panelWatts: big.watts } });
-    }
-    if (!site.elevated) {
-      const elev = roofLayout(roof, panel, { ...site, elevated: true }).maxPanels;
-      if (elev > layout.maxPanels) fixes.push({ title: 'Elevated steel structure', detail: `Raising the panels above the parapet, AC units and tank fits ${elev} panels on this roof.`, action: { elevated: true } });
     }
   }
   const nonInvAC = (load.ac15?.qty || 0) + (load.ac1?.qty || 0);
@@ -278,6 +324,12 @@ export function computePlan(input) {
 
   return {
     city, panel, layout, sunHours, season, site,
+    structure, structureCost,
+    structureAuto: !site.structure || site.structure === 'auto',
+    structureOptions: structurePick.options.map(({ key, structure: st, maxPanels, fits }) => ({
+      key, label: st.label, short: st.short, desc: st.desc, maxPanels, fits,
+      cost: Math.min(maxPanels, panelsWanted) * (panel.watts / 1000) * st.costPerKW,
+    })),
     loadKw, running, solarKw, sim,
     dailyKWh, peakW, requiredKW, panelsNeeded, areaNeeded,
     recommended: { inverterKW: recInverter, batteryKWh: recBattery, panels: panelsNeeded },

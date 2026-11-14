@@ -2,14 +2,15 @@ import { Suspense, lazy, useCallback, useMemo, useRef, useState } from 'react';
 import styled, { keyframes } from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-  faPlay, faPause, faTriangleExclamation, faCircleCheck, faCircleXmark, faWandMagicSparkles, faSun, faMoon,
+  faPlay, faPause, faTriangleExclamation, faCircleCheck, faCircleXmark, faWandMagicSparkles, faSun, faMoon, faPenRuler,
 } from '@fortawesome/free-solid-svg-icons';
 import InputsPanel from './InputsPanel';
 import Analytics from './Analytics';
 import BookingCard from './BookingCard';
 import { computePlan } from './sizing';
 import { DEFAULT_LOAD } from './appliances';
-import { CITIES, DEFAULT_SITE } from './config';
+import { CITIES, DEFAULT_SITE, ROOF_ITEMS } from './config';
+import { EditorToolbar, EditorInspector } from './RoofEditorUI';
 import { sunPosition } from '../three/sun';
 import { Card, CardTitle, Button, Range, t, statusColor } from './ui';
 
@@ -149,6 +150,15 @@ const Crew = styled.div`
   button.on, button:hover { background: ${t.orange}; color: #111; border-color: ${t.orange}; }
 `;
 
+const EditBtn = styled.button`
+  position: absolute; right: 14px; bottom: 70px; z-index: 2;
+  display: inline-flex; align-items: center; gap: 8px;
+  border: 0; border-radius: 12px; padding: 10px 14px; cursor: pointer;
+  background: ${t.orange}; color: #111; font-weight: 700; font-size: 0.85rem;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+  &:hover { filter: brightness(1.08); }
+`;
+
 const Loading = styled.div`
   height: 100%; display: grid; place-items: center; color: ${t.muted};
 `;
@@ -208,6 +218,45 @@ export default function SolarPlanner() {
   const [playing, setPlaying] = useState(true);
   const onHour = useCallback((h) => setHour(h), []);
 
+  // ---- 3D roof editor ----
+  const [editing, setEditing] = useState(false);
+  const [tool, setTool] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
+  const sceneRef = useRef(null);
+  const updateItems = useCallback((fn) => setSite((st) => ({ ...st, items: fn(st.items || []) })), []);
+  const addItem = useCallback((type, x = 0, z = 0) => {
+    const def = ROOF_ITEMS[type] || ROOF_ITEMS.other;
+    const id = `${type}-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4)}`;
+    updateItems((items) => [...items, { id, type, x, z, w: def.w, d: def.d, h: def.h }]);
+    setSelectedId(id);
+    setTool(null);
+    return id;
+  }, [updateItems]);
+  const moveItem = useCallback((id, x, z) => updateItems((items) => items.map((it) => (it.id === id ? { ...it, x, z } : it))), [updateItems]);
+  const changeItem = (id, patch) => updateItems((items) => items.map((it) => {
+    if (it.id !== id) return it;
+    const next = { ...it, ...patch };
+    if (it.type === 'tank' && patch.w) next.d = patch.w; // tanks are round
+    return next;
+  }));
+  const removeItem = (id) => { updateItems((items) => items.filter((it) => it.id !== id)); setSelectedId(null); };
+  const openEditor = () => {
+    // edit in clear midday light
+    clock.current.hour = 12.01; clock.current.playing = false; setPlaying(false); setHour(12);
+    setEditing(true);
+    sceneRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+  const closeEditor = () => {
+    setEditing(false); setTool(null); setSelectedId(null); crewCtl.current.replay += 1;
+    clock.current.playing = true; setPlaying(true);
+  };
+  const editor = useMemo(() => ({
+    editing, tool, selectedId,
+    onPlace: (type, x, z) => addItem(type, x, z),
+    onSelect: setSelectedId,
+    onMoveItem: moveItem,
+  }), [editing, tool, selectedId, addItem, moveItem]);
+
   const plan = useMemo(
     () => computePlan({ load, location, season, site, roof, panelWatts, mode, custom, withBattery, offGrid }),
     [load, location, season, site, roof, panelWatts, mode, custom, withBattery, offGrid],
@@ -238,7 +287,7 @@ export default function SolarPlanner() {
     }
     if (action.inverterKW) setCustom((c) => ({ ...c, inverterKW: action.inverterKW }));
     if (action.batteryKWh) { setWithBattery(true); setCustom((c) => ({ ...c, batteryKWh: action.batteryKWh })); }
-    if (action.elevated) setSite((st) => ({ ...st, elevated: true }));
+    if (action.structure) setSite((st) => ({ ...st, structure: action.structure }));
   };
 
   const k = hour % 24;
@@ -260,6 +309,7 @@ export default function SolarPlanner() {
             location={location} setLocation={setLocation}
             season={season} setSeason={setSeason}
             site={site} setSite={setSite}
+            onEditRoof={openEditor} onAddItem={(type) => { addItem(type, 0, 0); openEditor(); }} onRemoveItem={removeItem}
             roof={roof} setRoof={setRoof}
             panelWatts={panelWatts} setPanelWatts={setPanelWatts}
             mode={mode} setMode={setMode}
@@ -270,11 +320,28 @@ export default function SolarPlanner() {
           />
         </Side>
 
-          <SceneWrap $status={plan.status}>
+          <SceneWrap $status={plan.status} ref={sceneRef}>
             <Suspense fallback={<Loading>Building your roof…</Loading>}>
               <RoofScene plan={plan} roof={roof} site={site} lat={location.lat} season={season}
-                clock={clock} onHour={onHour} crewCtl={crewCtl} onProgress={onProgress} />
+                clock={clock} onHour={onHour} crewCtl={crewCtl} onProgress={onProgress} editor={editor} />
             </Suspense>
+            {editing && (() => {
+              const sel = plan.layout.obstacles.find((o) => o.id === selectedId);
+              const raw = (site.items || []).find((o) => o.id === selectedId);
+              return (
+                <>
+                  <EditorToolbar tool={tool} setTool={setTool} onDone={closeEditor} structureLabel={plan.structure.label} fits={plan.layout.maxPanels} />
+                  <EditorInspector
+                    item={raw && sel ? { ...raw, ...sel } : null} tool={tool}
+                    onChange={(patch) => changeItem(selectedId, patch)}
+                    onRotate={() => raw && changeItem(selectedId, { w: raw.d, d: raw.w })}
+                    onDuplicate={() => raw && addItem(raw.type, Math.min(roof.width / 2, raw.x + raw.w + 0.3), raw.z)}
+                    onDelete={() => removeItem(selectedId)}
+                  />
+                </>
+              );
+            })()}
+            {!editing && (<>
             <Banner $status={plan.status}>
               <div className="status"><FontAwesomeIcon icon={statusIcon[plan.status]} />{statusText[plan.status]}</div>
               <div className="live">
@@ -296,11 +363,13 @@ export default function SolarPlanner() {
                 <button type="button" onClick={() => { crewCtl.current.replay += 1; }}>Replay install</button>
               )}
             </Crew>
+            <EditBtn type="button" onClick={openEditor}><FontAwesomeIcon icon={faPenRuler} /> Edit roof</EditBtn>
             <TimeBar>
               <button type="button" onClick={togglePlay} aria-label={playing ? 'Pause day' : 'Play day'}><FontAwesomeIcon icon={playing ? faPause : faPlay} /></button>
               <div className="clock"><FontAwesomeIcon icon={night ? faMoon : faSun} style={{ color: night ? '#a5b4fc' : t.orange }} />{fmtHour(k)}</div>
               <Range min={0} max={23} step={1} value={k} onChange={scrub} aria-label="Time of day" />
             </TimeBar>
+            </>)}
           </SceneWrap>
 
         <Main>

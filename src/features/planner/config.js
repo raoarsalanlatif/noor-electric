@@ -6,7 +6,7 @@ export const PLANNER_CONFIG = {
   whatsappNumber: '923421946568',
 
   // Pricing (indicative)
-  costPerKW: 110000, // panels + inverter + structure + installation, per kW
+  costPerKW: 100000, // panels + inverter + wiring + installation, per kW (structure is priced separately below)
   batteryCostPerKWh: 45000, // lithium battery, per kWh
   tariffPerKWh: 60, // average grid tariff the customer pays
   exportRatePerKWh: 10, // credit for energy exported to the grid (net-metering)
@@ -20,7 +20,48 @@ export const PLANNER_CONFIG = {
   roofSetback: 0.6, // metres kept free along every roof edge
   rowPitch: 2.8, // metres between tilted panel rows (avoids shading)
   panelGap: 0.03,
+  // How far a rooftop object's shadow reaches, as a multiple of how much it stands above the panels.
+  // Sun is in the south, so the long shadow falls to the north (behind the object).
+  shadeNorth: 1.3,
+  shadeSide: 0.35,
+  accessGap: 0.3, // walkway kept around objects for maintenance
 };
+
+/**
+ * Mounting structures. Heights are in metres, cost is PKR per kW of panels (indicative).
+ * - L2 / L3: low frames bolted to the roof. Panels must keep clear of tanks, rooms, ACs and their shadows.
+ *   L3 sits higher, so short objects and parapet walls shade it less.
+ * - Elevated: tall steel structure that spans over tanks, ACs and the parapet. Only taller objects
+ *   (e.g. a stair room) block it.
+ */
+export const STRUCTURES = {
+  L2: { key: 'L2', label: 'L2 frame', short: 'L2', frontH: 0.15, backFt: 2, costPerKW: 9000, desc: 'Low frame, about 2 ft at the back' },
+  L3: { key: 'L3', label: 'L3 frame', short: 'L3', frontH: 0.35, backFt: 3, costPerKW: 12000, desc: 'Raised frame, about 3 ft at the back' },
+  elevated: { key: 'elevated', label: 'Elevated structure', short: 'Elevated', frontH: 2.45, backFt: 10, costPerKW: 32000, desc: 'Steel structure 8–10 ft high, spans over tanks and ACs' },
+};
+export const STRUCTURE_ORDER = ['L2', 'L3', 'elevated'];
+
+/** Things a customer can place on the roof in the 3D editor. Sizes in metres (w = east–west, d = north–south). */
+export const ROOF_ITEMS = {
+  room: { label: 'Stair room / room', short: 'Room', w: 3, d: 3.4, h: 2.7 },
+  tank: { label: 'Water tank', short: 'Tank', w: 1.2, d: 1.2, h: 1.3 },
+  ac: { label: 'AC outdoor unit', short: 'AC', w: 0.9, d: 0.4, h: 0.62 },
+  geyser: { label: 'Solar geyser', short: 'Geyser', w: 2, d: 1.3, h: 1.4 },
+  other: { label: 'Other (dish, store, shed…)', short: 'Other', w: 1, d: 1, h: 1 },
+};
+
+/** A typical roof: stair room in the back corner with a tank on top, two AC units. */
+export function defaultRoofItems(roof) {
+  const W = roof.width; const L = roof.length;
+  const room = { id: 'room-1', type: 'room', w: 3, d: 3.4, h: 2.7 };
+  room.x = -W / 2 + 0.2 + room.w / 2; room.z = -L / 2 + 0.2 + room.d / 2;
+  return [
+    room,
+    { id: 'tank-1', type: 'tank', x: room.x, z: room.z, w: 1.2, d: 1.2, h: 1.3 },
+    { id: 'ac-1', type: 'ac', x: W / 2 - 0.8, z: -L / 2 + 0.45, w: 0.9, d: 0.4, h: 0.62 },
+    { id: 'ac-2', type: 'ac', x: W / 2 - 2.05, z: -L / 2 + 0.45, w: 0.9, d: 0.4, h: 0.62 },
+  ];
+}
 
 export const PANEL_OPTIONS = [
   { watts: 450, width: 1.05, length: 2.09 },
@@ -61,8 +102,6 @@ export function nearestCity(lat, lng) {
 export const DEFAULT_SITE = {
   storeys: 2,
   parapetH: 0.9, // metres
-  stairRoom: true,
-  tank: true,
-  acUnits: 2,
-  elevated: false,
+  structure: 'auto', // 'auto' picks the cheapest structure that fits; or 'L2' | 'L3' | 'elevated'
+  items: defaultRoofItems({ width: 10, length: 14 }),
 };

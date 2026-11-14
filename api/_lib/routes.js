@@ -431,6 +431,8 @@ function quoteFields(b) {
       dailyKWh: num(plan.dailyKWh, { min: 0 }),
       status: str(plan.status, 20),
       estimatedCost: num(plan.estimatedCost, { min: 0 }),
+      structure: str(plan.structure, 40),
+      roofItems: str(plan.roofItems, 400),
     } : null,
   };
 }

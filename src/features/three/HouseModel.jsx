@@ -143,7 +143,7 @@ export default function HouseModel({ roof, site, obstacles = [], failing = false
           </mesh>
         ))}
         {obstacles.map((o, i) => {
-          if (o.type === 'stairRoom') {
+          if (o.type === 'room' || o.type === 'stairRoom') {
             return (
               <group key={i} position={[o.x, SLAB, o.z]}>
                 <mesh position={[0, o.h / 2, 0]} castShadow receiveShadow>
@@ -179,9 +179,46 @@ export default function HouseModel({ roof, site, obstacles = [], failing = false
               </group>
             );
           }
+          const lift = SLAB + (o.onTop ? o.onTop + 0.16 : 0);
+          if (o.type === 'geyser') {
+            // evacuated-tube solar water heater: tilted tube rack with a tank along the top
+            const tubes = Math.max(4, Math.round(o.w / 0.12));
+            return (
+              <group key={o.id || i} position={[o.x, lift, o.z]}>
+                <group rotation={[-0.75, 0, 0]} position={[0, o.h * 0.42, 0.05]}>
+                  {Array.from({ length: tubes }).map((_, k) => (
+                    <mesh key={k} position={[-o.w / 2 + (k + 0.5) * (o.w / tubes), 0, 0]} castShadow>
+                      <cylinderGeometry args={[0.035, 0.035, o.d * 1.15, 8]} />
+                      <meshStandardMaterial color="#1f2937" metalness={0.4} roughness={0.25} />
+                    </mesh>
+                  ))}
+                </group>
+                <mesh position={[0, o.h - 0.15, -o.d / 2 + 0.15]} rotation={[0, 0, Math.PI / 2]} castShadow>
+                  <cylinderGeometry args={[0.17, 0.17, o.w, 16]} />
+                  <meshStandardMaterial color="#d1d5db" metalness={0.6} roughness={0.3} />
+                </mesh>
+                {[-o.w / 2 + 0.05, o.w / 2 - 0.05].map((x) => (
+                  <mesh key={x} position={[x, o.h / 2, 0]} castShadow>
+                    <boxGeometry args={[0.04, o.h, o.d]} />
+                    <meshStandardMaterial color="#9ca3af" metalness={0.7} />
+                  </mesh>
+                ))}
+              </group>
+            );
+          }
+          if (o.type === 'other') {
+            return (
+              <group key={o.id || i} position={[o.x, lift, o.z]}>
+                <mesh position={[0, o.h / 2, 0]} castShadow receiveShadow>
+                  <boxGeometry args={[o.w, o.h, o.d]} />
+                  <meshStandardMaterial color="#b8b2a7" roughness={0.85} />
+                </mesh>
+              </group>
+            );
+          }
           // AC outdoor unit
           return (
-            <group key={i} position={[o.x, SLAB, o.z]}>
+            <group key={i} position={[o.x, lift, o.z]}>
               <mesh position={[0, o.h / 2 + 0.08, 0]} castShadow>
                 <boxGeometry args={[o.w, o.h, o.d]} />
                 <meshStandardMaterial color="#e9ecef" roughness={0.5} />
