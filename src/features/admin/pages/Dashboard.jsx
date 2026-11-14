@@ -3,7 +3,7 @@ import styled from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faFileInvoiceDollar, faCalendarDays, faTableColumns, faMoneyBillWave, faNewspaper } from '@fortawesome/free-solid-svg-icons';
 import { useAuth, useLoad } from '../hooks';
-import { a, Card, PageHead, Badge, Empty, ErrorBox, pkr, fmtDateTime } from '../ui';
+import { a, Card, PageHead, Badge, Empty, ErrorBox, pkr, fmtDateTime, Loading } from '../ui';
 import { STAGE_LABELS, QUOTE_LABELS, EVENT_LABELS } from '../labels';
 
 const Kpis = styled.div`
@@ -34,12 +34,13 @@ const Funnel = styled.div`
 
 export default function Dashboard() {
   const { user, isOwner } = useAuth();
-  const { data, error } = useLoad('dashboard');
+  const { data, error, loading } = useLoad('dashboard');
   const maxStage = data ? Math.max(1, ...Object.values(data.byStage)) : 1;
   return (
     <>
       <PageHead><div><h1>Salam, {user.name.split(' ')[0]} 👋</h1><p>Here’s what’s happening at Noor Electric today.</p></div></PageHead>
       {error && <ErrorBox>{error}</ErrorBox>}
+      {loading && !data && <Loading label="Loading dashboard…" />}
       {data && (
         <>
           <Kpis>

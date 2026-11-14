@@ -5,7 +5,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPlus, faUsers, faWandMagicSparkles, faTrash, faCircleCheck, faFileCsv } from '@fortawesome/free-solid-svg-icons';
 import { post, patch, del } from '../../../lib/api';
 import { useLoad } from '../hooks';
-import { a, Card, PageHead, Btn, Badge, Table, Empty, ErrorBox, Modal, Field, FormGrid, pkr, fmtDate, toDateInput } from '../ui';
+import { a, Card, PageHead, Btn, Badge, Table, Empty, ErrorBox, Modal, Field, FormGrid, pkr, fmtDate, toDateInput, Loading, LoadFailed } from '../ui';
 
 const Tabs = styled.div`
   display: flex; gap: 6px; margin-bottom: 14px;
@@ -56,7 +56,7 @@ function EmployeeModal({ emp, onClose, onSaved }) {
 }
 
 function Employees() {
-  const { data, error, reload } = useLoad('employees');
+  const { data, error, loading, reload } = useLoad('employees');
   const [open, setOpen] = useState(null);
   const items = data?.items || [];
   const monthly = items.filter((e) => e.active).reduce((s, e) => s + (e.baseSalary || 0) + (e.allowances || 0), 0);
@@ -84,7 +84,7 @@ function Employees() {
               </tbody>
             </table>
           </Table>
-        ) : <Empty><FontAwesomeIcon icon={faUsers} /><br />Add your installers, engineers and office staff.</Empty>}
+        ) : loading && !data ? <Loading label="Loading team…" /> : error && !data ? <LoadFailed onRetry={reload} /> : <Empty><FontAwesomeIcon icon={faUsers} /><br />Add your installers, engineers and office staff.</Empty>}
       </Card>
       {open && <EmployeeModal emp={open} onClose={() => setOpen(null)} onSaved={() => { setOpen(null); reload(); }} />}
     </>
@@ -93,7 +93,7 @@ function Employees() {
 
 function Payroll() {
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
-  const { data, error, reload, setData } = useLoad(`payroll?month=${month}`);
+  const { data, error, loading, reload, setData } = useLoad(`payroll?month=${month}`);
   const [err, setErr] = useState('');
   const items = data?.items || [];
   const total = items.reduce((s, r) => s + (r.net || 0), 0);
@@ -167,7 +167,7 @@ function Payroll() {
               </tbody>
             </table>
           </Table>
-        ) : <Empty>No payroll for {month} yet. Press “Generate {month} payroll” to create a row for every active team member.</Empty>}
+        ) : loading ? <Loading label="Loading payroll…" /> : error && !data ? <LoadFailed onRetry={reload} /> : <Empty>No payroll for {month} yet. Press “Generate {month} payroll” to create a row for every active team member.</Empty>}
       </Card>
     </>
   );

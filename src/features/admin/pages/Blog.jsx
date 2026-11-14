@@ -7,7 +7,7 @@ import { post, patch, del } from '../../../lib/api';
 import { markdownToHtml } from '../../../lib/markdown';
 import { useLoad } from '../hooks';
 import Prose from '../../../components/ui/Prose';
-import { a, Card, PageHead, Btn, Badge, Table, Empty, ErrorBox, Modal, Field, FormGrid, fmtDate } from '../ui';
+import { a, Card, PageHead, Btn, Badge, Table, Empty, ErrorBox, Modal, Field, FormGrid, fmtDate, Loading, LoadFailed } from '../ui';
 
 
 const Help = styled.p`
@@ -90,7 +90,7 @@ function Editor({ post: initial, onClose, onSaved }) {
 }
 
 export default function Blog() {
-  const { data, error, reload } = useLoad('blogs');
+  const { data, error, loading, reload } = useLoad('blogs');
   const [open, setOpen] = useState(null);
   const items = data?.items || [];
   return (
@@ -121,7 +121,7 @@ export default function Blog() {
               </tbody>
             </table>
           </Table>
-        ) : <Empty><FontAwesomeIcon icon={faNewspaper} /><br />No posts yet — write your first article.</Empty>}
+        ) : loading && !data ? <Loading label="Loading posts…" /> : error && !data ? <LoadFailed onRetry={reload} /> : <Empty><FontAwesomeIcon icon={faNewspaper} /><br />No posts yet — write your first article.</Empty>}
       </Card>
       {open && <Editor post={open} onClose={() => setOpen(null)} onSaved={() => { setOpen(null); reload(); }} />}
     </>
