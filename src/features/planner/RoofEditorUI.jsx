@@ -2,7 +2,7 @@
 import styled from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-  faDoorClosed, faFaucetDrip, faFan, faTemperatureHigh, faCube, faCheck, faRotate, faTrash, faCopy, faHandPointer,
+  faDoorClosed, faFaucetDrip, faFan, faTemperatureHigh, faCube, faCheck, faRotate, faTrash, faCopy, faHandPointer, faExpand, faCompress,
 } from '@fortawesome/free-solid-svg-icons';
 import { ROOF_ITEMS } from './config';
 import { t } from './ui';
@@ -18,7 +18,8 @@ const Bar = styled.div`
     border-radius: 10px; padding: 7px 10px; cursor: pointer; font-size: 0.8rem; font-weight: 600; }
   button:hover { border-color: ${t.orange}; }
   button.on { background: ${t.orange}; color: #111; border-color: ${t.orange}; }
-  .done { margin-left: auto; background: #22c55e; color: #052e16; border-color: #22c55e; }
+  .fs { margin-left: auto; }
+  .done { background: #22c55e; color: #052e16; border-color: #22c55e; }
   @media (max-width: 640px) { .title { width: 100%; } button span { display: none; } .done span { display: inline; } }
 `;
 
@@ -41,7 +42,7 @@ const Inspector = styled.div`
 
 const num = (v, min, max) => Math.min(max, Math.max(min, Number(v) || min));
 
-export function EditorToolbar({ tool, setTool, onDone, structureLabel, fits }) {
+export function EditorToolbar({ tool, setTool, onDone, structureLabel, fits, fullscreen, onFullscreen }) {
   return (
     <Bar>
       <span className="title">Roof editor · {structureLabel}: <span style={{ color: t.orange }}>{fits} panels fit</span></span>
@@ -50,6 +51,11 @@ export function EditorToolbar({ tool, setTool, onDone, structureLabel, fits }) {
           <FontAwesomeIcon icon={ITEM_ICONS[key]} /><span>{it.short}</span>
         </button>
       ))}
+      {onFullscreen && (
+        <button type="button" className="fs" onClick={onFullscreen} aria-label={fullscreen ? 'Exit full screen' : 'View full screen'} title={fullscreen ? 'Exit full screen (Esc)' : 'Full screen'}>
+          <FontAwesomeIcon icon={fullscreen ? faCompress : faExpand} />
+        </button>
+      )}
       <button type="button" className="done" onClick={onDone}><FontAwesomeIcon icon={faCheck} /><span>Done</span></button>
     </Bar>
   );
