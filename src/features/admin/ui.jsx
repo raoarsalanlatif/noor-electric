@@ -1,8 +1,9 @@
 /* eslint-disable react/prop-types, react-refresh/only-export-components */
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import styled, { css, keyframes } from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faXmark } from '@fortawesome/free-solid-svg-icons';
+import { faXmark, faCircleExclamation } from '@fortawesome/free-solid-svg-icons';
+import { onActivity, onApiError } from '../../lib/api';
 
 export const a = {
   bg: '#f3f5fa', card: '#ffffff', line: '#e4e8f0', text: '#18202f', muted: '#667085',
@@ -122,3 +123,84 @@ export const toLocalInput = (d) => {
 };
 export const toDateInput = (d) => (d ? new Date(d).toISOString().slice(0, 10) : '');
 export const waLink = (phone, text = '') => `https://wa.me/${String(phone || '').replace(/\D/g, '').replace(/^0/, '92')}${text ? `?text=${encodeURIComponent(text)}` : ''}`;
+
+// ---- loading & activity feedback ----------------------------------------
+
+const spin = keyframes`to { transform: rotate(360deg); }`;
+export const Spinner = styled.span`
+  display: inline-block; width: ${(p) => p.$size || 18}px; height: ${(p) => p.$size || 18}px; border-radius: 50%;
+  border: 2.5px solid ${(p) => (p.$light ? 'rgba(255,255,255,0.35)' : '#d5dbe6')};
+  border-top-color: ${(p) => (p.$light ? '#fff' : a.blue)};
+  animation: ${spin} 0.7s linear infinite; flex-shrink: 0;
+`;
+
+const LoadingWrap = styled.div`
+  display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 44px 12px; color: ${a.muted}; font-size: 0.9rem;
+`;
+/** Centered spinner for a section that is loading for the first time. */
+export function Loading({ label = 'Loading…' }) {
+  return <LoadingWrap role="status" aria-live="polite"><Spinner $size={28} />{label}</LoadingWrap>;
+}
+
+const slide = keyframes`0% { left: -35%; width: 35%; } 60% { width: 45%; } 100% { left: 100%; width: 30%; }`;
+const Bar = styled.div`
+  position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 3000; overflow: hidden; pointer-events: none;
+  opacity: ${(p) => (p.$on ? 1 : 0)}; transition: opacity 0.25s;
+  &::after { content: ''; position: absolute; top: 0; bottom: 0; background: linear-gradient(90deg, ${a.gold}, ${a.orange});
+    animation: ${slide} 1.1s ease-in-out infinite; }
+`;
+const Pill = styled.div`
+  position: fixed; right: 18px; bottom: 18px; z-index: 3000; display: flex; align-items: center; gap: 10px;
+  background: ${a.navy}; color: #fff; padding: 10px 16px; border-radius: 999px; font-size: 0.86rem; font-weight: 600;
+  box-shadow: 0 12px 30px rgba(10,31,77,0.3); animation: ${fade} 0.18s ease;
+`;
+
+/**
+ * Global feedback: a progress bar while anything is loading, a "Saving…" pill
+ * while changes are being sent (other buttons are locked meanwhile to avoid double
+ * submits), and a toast when a request fails.
+ */
+export function ActivityIndicator() {
+  const [act, setAct] = useState({ reads: 0, writes: 0 });
+  const [showSaving, setShowSaving] = useState(false);
+  const [toast, setToast] = useState(null);
+  useEffect(() => onActivity(setAct), []);
+  // page loads show their own error box; the toast is for failed saves/deletes
+  useEffect(() => onApiError((e, req) => { if (req.method !== 'GET') setToast({ msg: e.message, id: Date.now() }); }), []);
+  useEffect(() => {
+    // only show the pill if saving takes a moment, so quick saves don't flicker
+    if (!act.writes) { setShowSaving(false); return undefined; }
+    const t = setTimeout(() => setShowSaving(true), 250);
+    return () => clearTimeout(t);
+  }, [act.writes]);
+  useEffect(() => {
+    if (!toast) return undefined;
+    const t = setTimeout(() => setToast(null), 6000);
+    return () => clearTimeout(t);
+  }, [toast]);
+  useEffect(() => {
+    document.body.classList.toggle('ne-saving', act.writes > 0);
+    return () => document.body.classList.remove('ne-saving');
+  }, [act.writes]);
+  return (
+    <>
+      <Bar $on={act.reads + act.writes > 0} aria-hidden="true" />
+      {showSaving && <Pill role="status"><Spinner $light $size={16} />Saving…</Pill>}
+      {!showSaving && toast && (
+        <Pill role="alert" style={{ background: '#b42318', maxWidth: 'calc(100vw - 36px)' }} onClick={() => setToast(null)}>
+          <FontAwesomeIcon icon={faCircleExclamation} /><span>{toast.msg}</span>
+        </Pill>
+      )}
+    </>
+  );
+}
+
+/** Shown instead of an empty state when the list could not be loaded. */
+export function LoadFailed({ onRetry }) {
+  return (
+    <Empty>
+      Couldn’t load this list.<br />
+      <Btn type="button" $v="ghost" $sm style={{ marginTop: 12 }} onClick={onRetry}>Try again</Btn>
+    </Empty>
+  );
+}
