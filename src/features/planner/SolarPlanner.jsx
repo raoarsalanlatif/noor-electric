@@ -2,7 +2,7 @@ import { Suspense, lazy, useCallback, useMemo, useRef, useState } from 'react';
 import styled, { keyframes } from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-  faPlay, faPause, faTriangleExclamation, faCircleCheck, faCircleXmark, faWandMagicSparkles, faSun, faMoon, faPenRuler,
+  faPlay, faPause, faTriangleExclamation, faCircleCheck, faCircleXmark, faWandMagicSparkles, faSun, faMoon, faPenRuler, faExpand, faCompress,
 } from '@fortawesome/free-solid-svg-icons';
 import InputsPanel from './InputsPanel';
 import Analytics from './Analytics';
@@ -11,6 +11,7 @@ import { computePlan } from './sizing';
 import { DEFAULT_LOAD } from './appliances';
 import { CITIES, DEFAULT_SITE, ROOF_ITEMS } from './config';
 import { EditorToolbar, EditorInspector } from './RoofEditorUI';
+import { useFullscreen, fullscreenCss } from '../../lib/useFullscreen';
 import { sunPosition } from '../three/sun';
 import { Card, CardTitle, Button, Range, t, statusColor } from './ui';
 
@@ -72,6 +73,7 @@ const SceneWrap = styled.div`
   box-shadow: ${(p) => (p.$status === 'fail' ? `0 0 0 4px ${t.red}22, 0 20px 60px ${t.red}22` : '0 20px 60px rgba(0,0,0,0.35)')};
   transition: border-color 0.3s, box-shadow 0.3s;
   background: #0b1220;
+  ${(p) => (p.$full ? fullscreenCss : '')}
 `;
 
 const pulse = keyframes`
@@ -150,8 +152,16 @@ const Crew = styled.div`
   button.on, button:hover { background: ${t.orange}; color: #111; border-color: ${t.orange}; }
 `;
 
-const EditBtn = styled.button`
+const FsBtn = styled.button`
   position: absolute; right: 14px; bottom: 70px; z-index: 2;
+  width: 42px; height: 42px; border-radius: 12px; cursor: pointer;
+  display: grid; place-items: center; font-size: 1rem;
+  border: 1px solid ${t.line}; background: rgba(10,15,26,0.78); color: ${t.text}; backdrop-filter: blur(8px);
+  &:hover { border-color: ${t.orange}; color: ${t.orange}; }
+`;
+
+const EditBtn = styled.button`
+  position: absolute; right: 64px; bottom: 70px; z-index: 2;
   display: inline-flex; align-items: center; gap: 8px;
   border: 0; border-radius: 12px; padding: 10px 14px; cursor: pointer;
   background: ${t.orange}; color: #111; font-weight: 700; font-size: 0.85rem;
@@ -223,6 +233,7 @@ export default function SolarPlanner() {
   const [tool, setTool] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const sceneRef = useRef(null);
+  const fs = useFullscreen(sceneRef);
   const updateItems = useCallback((fn) => setSite((st) => ({ ...st, items: fn(st.items || []) })), []);
   const addItem = useCallback((type, x = 0, z = 0) => {
     const def = ROOF_ITEMS[type] || ROOF_ITEMS.other;
@@ -244,7 +255,7 @@ export default function SolarPlanner() {
     // edit in clear midday light
     clock.current.hour = 12.01; clock.current.playing = false; setPlaying(false); setHour(12);
     setEditing(true);
-    sceneRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (!fs.active) sceneRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
   const closeEditor = () => {
     setEditing(false); setTool(null); setSelectedId(null); crewCtl.current.replay += 1;
@@ -320,7 +331,7 @@ export default function SolarPlanner() {
           />
         </Side>
 
-          <SceneWrap $status={plan.status} ref={sceneRef}>
+          <SceneWrap $status={plan.status} ref={sceneRef} $full={fs.active}>
             <Suspense fallback={<Loading>Building your roof…</Loading>}>
               <RoofScene plan={plan} roof={roof} site={site} lat={location.lat} season={season}
                 clock={clock} onHour={onHour} crewCtl={crewCtl} onProgress={onProgress} editor={editor} />
@@ -330,7 +341,7 @@ export default function SolarPlanner() {
               const raw = (site.items || []).find((o) => o.id === selectedId);
               return (
                 <>
-                  <EditorToolbar tool={tool} setTool={setTool} onDone={closeEditor} structureLabel={plan.structure.label} fits={plan.layout.maxPanels} />
+                  <EditorToolbar tool={tool} setTool={setTool} onDone={closeEditor} structureLabel={plan.structure.label} fits={plan.layout.maxPanels} fullscreen={fs.active} onFullscreen={fs.toggle} />
                   <EditorInspector
                     item={raw && sel ? { ...raw, ...sel } : null} tool={tool}
                     onChange={(patch) => changeItem(selectedId, patch)}
@@ -364,6 +375,9 @@ export default function SolarPlanner() {
               )}
             </Crew>
             <EditBtn type="button" onClick={openEditor}><FontAwesomeIcon icon={faPenRuler} /> Edit roof</EditBtn>
+            <FsBtn type="button" onClick={fs.toggle} aria-label={fs.active ? 'Exit full screen' : 'View full screen'} title={fs.active ? 'Exit full screen (Esc)' : 'Full screen'}>
+              <FontAwesomeIcon icon={fs.active ? faCompress : faExpand} />
+            </FsBtn>
             <TimeBar>
               <button type="button" onClick={togglePlay} aria-label={playing ? 'Pause day' : 'Play day'}><FontAwesomeIcon icon={playing ? faPause : faPlay} /></button>
               <div className="clock"><FontAwesomeIcon icon={night ? faMoon : faSun} style={{ color: night ? '#a5b4fc' : t.orange }} />{fmtHour(k)}</div>

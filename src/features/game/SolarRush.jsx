@@ -4,12 +4,13 @@ import styled, { keyframes, css } from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faBolt, faSun, faMoon, faPlay, faRotateRight, faVolumeHigh, faVolumeXmark, faBroom, faTrophy,
-  faCarBattery, faDroplet, faCloudBolt, faArrowLeft, faArrowRight, faArrowUp, faArrowDown, faSolarPanel, faWind, faLocationArrow,
+  faCarBattery, faDroplet, faCloudBolt, faArrowLeft, faArrowRight, faArrowUp, faArrowDown, faSolarPanel, faWind, faLocationArrow, faExpand, faCompress,
 } from '@fortawesome/free-solid-svg-icons';
 import { faWhatsapp } from '@fortawesome/free-brands-svg-icons';
 import { newGame, DIFFICULTIES } from './state';
 import { sfx, setMuted } from './sfx';
 import { company } from '../../content/company';
+import { useFullscreen, fullscreenCss } from '../../lib/useFullscreen';
 
 const GameScene = lazy(() => import('./GameScene'));
 
@@ -29,6 +30,7 @@ const Page = styled.div`
   touch-action: none;
   @media (max-width: 600px) { height: calc(100dvh - 68px); }
   canvas { touch-action: none; }
+  ${(p) => (p.$full ? fullscreenCss : '')}
 `;
 
 const Hud = styled.div`
@@ -91,6 +93,12 @@ const Controls = styled.div`
   display: flex; justify-content: space-between; align-items: flex-end; gap: 10px;
   pointer-events: none;
   > * { pointer-events: auto; }
+`;
+
+const FsCorner = styled.button`
+  position: absolute; right: 16px; bottom: 16px; z-index: 30;
+  width: 46px; height: 46px; border-radius: 14px; cursor: pointer; display: grid; place-items: center; font-size: 1.05rem;
+  border: 1px solid ${C.line}; background: ${C.panel}; color: ${C.text}; backdrop-filter: blur(8px);
 `;
 
 const RoundBtn = styled.button`
@@ -266,6 +274,8 @@ export default function SolarRush() {
   }, []);
 
   const toggleMute = () => { setMuted(!muted); setMutedState(!muted); };
+  const pageRef = useRef(null);
+  const fs = useFullscreen(pageRef);
   const hold = (k) => ({
     onPointerDown: (e) => { e.preventDefault(); keys.current[k] = true; },
     onPointerUp: () => { keys.current[k] = false; },
@@ -277,11 +287,16 @@ export default function SolarRush() {
   const shareText = result ? `I kept my house powered for ${result.day} day${result.day > 1 ? 's' : ''} and scored ${result.score} on ${DIFFICULTIES[diff].label} in Solar Rush by ${company.name}! Can you beat me? https://${company.website}/play` : '';
 
   return (
-    <Page>
+    <Page ref={pageRef} $full={fs.active}>
       <Suspense fallback={<Overlay><Card><h2>Loading Solar Rush…</h2></Card></Overlay>}>
         <GameScene game={game} keys={keys} clock={clock} onHud={onHud} onEvent={onEvent} onOver={onOver} />
       </Suspense>
       <Flash $v={hud?.flash || 0} />
+      {status !== 'playing' && (
+        <FsCorner type="button" onClick={fs.toggle} aria-label={fs.active ? 'Exit full screen' : 'Play full screen'} title={fs.active ? 'Exit full screen (Esc)' : 'Full screen'}>
+          <FontAwesomeIcon icon={fs.active ? faCompress : faExpand} />
+        </FsCorner>
+      )}
 
       {status === 'playing' && hud && (
         <>
@@ -318,6 +333,7 @@ export default function SolarRush() {
             <Hint>Stand on the gold circles · Move: arrows / WASD / mouse · Clean: Space</Hint>
             <div style={{ display: 'flex', gap: 8 }}>
               <RoundBtn type="button" onClick={toggleMute} aria-label={muted ? 'Unmute' : 'Mute'}><FontAwesomeIcon icon={muted ? faVolumeXmark : faVolumeHigh} /></RoundBtn>
+              <RoundBtn type="button" onClick={fs.toggle} aria-label={fs.active ? 'Exit full screen' : 'Play full screen'} title={fs.active ? 'Exit full screen (Esc)' : 'Full screen'}><FontAwesomeIcon icon={fs.active ? faCompress : faExpand} /></RoundBtn>
               <RoundBtn type="button" $hot={hud.dirt > 0.2} onClick={() => { keys.current.clean = true; }}>
                 <FontAwesomeIcon icon={faBroom} /> Clean {hud.dirt > 0.02 && <small>{Math.round(hud.dirt * 100)}% dusty</small>}
               </RoundBtn>
