@@ -6,7 +6,7 @@ import { faPlus, faChevronLeft, faChevronRight, faCalendarCheck, faDownload, faT
 import { faGoogle, faWhatsapp } from '@fortawesome/free-brands-svg-icons';
 import { post, patch, del } from '../../../lib/api';
 import { useLoad, useTeam } from '../hooks';
-import { a, Card, PageHead, Btn, Badge, Empty, ErrorBox, Modal, Field, FormGrid, fmtDateTime, toLocalInput } from '../ui';
+import { a, Card, PageHead, Btn, Badge, Empty, ErrorBox, Modal, Field, FormGrid, fmtDateTime, toLocalInput, Loading } from '../ui';
 import { EVENT_LABELS, EVENT_COLORS } from '../labels';
 import { googleCalendarUrl, downloadIcs, whatsappInviteUrl } from '../calendarLinks';
 
@@ -166,7 +166,7 @@ export default function CalendarPage() {
                 </li>
               ))}
             </ul>
-          ) : <Empty>Nothing scheduled yet. Click a day to add an event.</Empty>}
+          ) : upcoming.loading && !upcoming.data ? <Loading /> : <Empty>Nothing scheduled yet. Click a day to add an event.</Empty>}
         </Card>
       </Layout>
       {open && <EventForm initial={open} onClose={() => setOpen(null)} onSaved={done} />}

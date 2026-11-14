@@ -9,7 +9,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { get, post, ApiError } from '../../lib/api';
 import { img } from '../../content/company';
-import { a, Btn, Field, ErrorBox, Modal } from './ui';
+import { a, Btn, Field, ErrorBox, Modal, ActivityIndicator, Loading, Spinner } from './ui';
 import { AuthCtx } from './hooks';
 import Dashboard from './pages/Dashboard';
 import Quotes from './pages/Quotes';
@@ -66,6 +66,8 @@ const TopBar = styled.div`
 const Main = styled.main`
   padding: 26px clamp(16px, 3vw, 34px) 60px;
   min-width: 0;
+  /* while a change is being saved, lock other buttons so nothing is sent twice */
+  body.ne-saving & button, body.ne-saving & a[role='button'] { pointer-events: none; opacity: 0.6; cursor: progress; }
 `;
 
 const LoginWrap = styled.div`
@@ -96,7 +98,7 @@ function Login({ onLogin }) {
         {err && <ErrorBox>{err}</ErrorBox>}
         <Field>Email<input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required /></Field>
         <Field>Password<input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></Field>
-        <Btn type="submit" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</Btn>
+        <Btn type="submit" disabled={busy}>{busy ? <><Spinner $light $size={16} />Signing in…</> : 'Sign in'}</Btn>
         <Link to="/">← Back to website</Link>
       </form>
     </LoginWrap>
@@ -148,7 +150,7 @@ export default function AdminApp() {
 
   const logout = useCallback(async () => { try { await post('auth/logout'); } catch { /* ignore */ } setUser(null); }, []);
 
-  if (user === undefined) return <LoginWrap><p style={{ color: '#fff' }}>Loading…</p></LoginWrap>;
+  if (user === undefined) return <LoginWrap><div style={{ background: '#fff', borderRadius: 16, padding: '10px 40px' }}><Loading label="Loading admin…" /></div></LoginWrap>;
   if (!user) {
     return (
       <>
@@ -161,6 +163,7 @@ export default function AdminApp() {
 
   return (
     <AuthCtx.Provider value={{ user, isOwner, logout }}>
+      <ActivityIndicator />
       <TopBar>
         <button type="button" onClick={() => setOpen(true)} aria-label="Open menu"><FontAwesomeIcon icon={faBars} /></button>
         <b>Noor Electric Admin</b>

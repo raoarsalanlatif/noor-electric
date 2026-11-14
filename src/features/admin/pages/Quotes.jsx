@@ -7,7 +7,7 @@ import { faPlus, faInbox, faCalendarPlus, faTableColumns, faTrash } from '@forta
 import { faWhatsapp } from '@fortawesome/free-brands-svg-icons';
 import { patch, post, del } from '../../../lib/api';
 import { useLoad, useTeam } from '../hooks';
-import { a, Card, PageHead, Btn, Badge, Table, Empty, ErrorBox, Modal, Field, FormGrid, pkr, fmtDate, waLink, toLocalInput } from '../ui';
+import { a, Card, PageHead, Btn, Badge, Table, Empty, ErrorBox, Modal, Field, FormGrid, pkr, fmtDate, waLink, toLocalInput, Loading, LoadFailed } from '../ui';
 import { QUOTE_LABELS, QUOTE_TONES } from '../labels';
 import { EventForm } from './CalendarPage';
 
@@ -102,7 +102,7 @@ function QuoteModal({ quote, onClose, onSaved }) {
 
 export default function Quotes() {
   const [status, setStatus] = useState('');
-  const { data, error, reload } = useLoad(`quotes${status ? `?status=${status}` : ''}`);
+  const { data, error, loading, reload } = useLoad(`quotes${status ? `?status=${status}` : ''}`);
   const [open, setOpen] = useState(null);
   const items = data?.items || [];
   return (
@@ -136,7 +136,7 @@ export default function Quotes() {
               </tbody>
             </table>
           </Table>
-        ) : <Empty><FontAwesomeIcon icon={faInbox} /><br />No quotation requests {status ? 'with this status' : 'yet'}.</Empty>}
+        ) : loading ? <Loading label="Loading quotations…" /> : error && !data ? <LoadFailed onRetry={reload} /> : <Empty><FontAwesomeIcon icon={faInbox} /><br />No quotation requests {status ? 'with this status' : 'yet'}.</Empty>}
       </Card>
       {open && <QuoteModal quote={open} onClose={() => setOpen(null)} onSaved={() => { setOpen(null); reload(); }} />}
     </>

@@ -4,7 +4,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPlus, faTrash } from '@fortawesome/free-solid-svg-icons';
 import { post, patch, del } from '../../../lib/api';
 import { useAuth, useLoad } from '../hooks';
-import { a, Card, PageHead, Btn, Badge, Table, ErrorBox, Modal, Field, FormGrid, fmtDate } from '../ui';
+import { a, Card, PageHead, Btn, Badge, Table, ErrorBox, Modal, Field, FormGrid, fmtDate, Loading } from '../ui';
 
 function UserModal({ u, onClose, onSaved }) {
   const isNew = !u._id;
@@ -38,7 +38,7 @@ function UserModal({ u, onClose, onSaved }) {
 
 export default function Users() {
   const { user } = useAuth();
-  const { data, error, reload } = useLoad('users');
+  const { data, error, loading, reload } = useLoad('users');
   const [open, setOpen] = useState(null);
   const [err, setErr] = useState('');
   const remove = async (u) => {
@@ -73,6 +73,7 @@ export default function Users() {
             </tbody>
           </table>
         </Table>
+        {loading && !data && <Loading label="Loading users…" />}
       </Card>
       {open && <UserModal u={open} onClose={() => setOpen(null)} onSaved={() => { setOpen(null); reload(); }} />}
     </>

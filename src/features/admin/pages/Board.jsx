@@ -5,7 +5,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPlus, faTrash, faSolarPanel, faCalendarDay, faCircleCheck, faLocationDot } from '@fortawesome/free-solid-svg-icons';
 import { post, patch, del } from '../../../lib/api';
 import { useLoad, useTeam } from '../hooks';
-import { a, PageHead, Btn, ErrorBox, Modal, Field, FormGrid, pkr, fmtDate, toDateInput } from '../ui';
+import { a, PageHead, Btn, ErrorBox, Loading, Modal, Field, FormGrid, pkr, fmtDate, toDateInput } from '../ui';
 import { STAGE_LABELS, STAGES } from '../labels';
 
 const STAGE_COLORS = { lead: '#94a3b8', survey: '#1a4fb4', quotation: '#7c3aed', approved: '#0891b2', installation: '#f47b20', net_metering: '#d97706', completed: '#16a34a' };
@@ -136,7 +136,7 @@ function ProjectModal({ project, onClose, onSaved }) {
 }
 
 export default function Board() {
-  const { data, error, reload, setData } = useLoad('projects');
+  const { data, error, loading, reload, setData } = useLoad('projects');
   const team = useTeam();
   const [open, setOpen] = useState(null);
   const [drag, setDrag] = useState(null);
@@ -148,6 +148,7 @@ export default function Board() {
 
   const dropOn = async (stage, beforeId) => {
     if (!drag) return;
+    setErr('');
     const card = items.find((p) => p._id === drag);
     setDrag(null); setOver(null);
     if (!card) return;
@@ -165,7 +166,8 @@ export default function Board() {
         <div><h1>Project board</h1><p>Drag cards between stages — from first lead to green meter.</p></div>
         <div className="actions"><Btn type="button" onClick={() => setOpen({ stage: 'lead' })}><FontAwesomeIcon icon={faPlus} /> New project</Btn></div>
       </PageHead>
-      {(error || err) && <ErrorBox>{error || err}</ErrorBox>}
+      {(error || err) && <ErrorBox>{error || err} <button type="button" onClick={() => { setErr(''); reload(); }} style={{ marginLeft: 8, border: 0, background: 'none', color: 'inherit', textDecoration: 'underline', cursor: 'pointer', fontWeight: 600 }}>Try again</button></ErrorBox>}
+      {loading && !data ? <Loading label="Loading projects…" /> : (
       <Columns>
         {STAGES.map((s) => {
           const col = byStage(s);
@@ -220,6 +222,7 @@ export default function Board() {
           );
         })}
       </Columns>
+      )}
       {open && <ProjectModal project={open} onClose={() => setOpen(null)} onSaved={() => { setOpen(null); reload(); }} />}
     </>
   );

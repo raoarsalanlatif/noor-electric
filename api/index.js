@@ -2,6 +2,7 @@
 // vercel.json rewrites /api/<route> to /api/index?route=<route>.
 import { routes } from './_lib/routes.js';
 import { send, HttpError } from './_lib/http.js';
+import { isDbUnavailable, resetClient } from './_lib/db.js';
 
 export default async function handler(req, res) {
   const url = new URL(req.url, 'http://localhost');
@@ -30,6 +31,13 @@ export default async function handler(req, res) {
     const data = await match.handler(req, res, id, query);
     send(res, 200, data ?? { ok: true });
   } catch (e) {
+    if (isDbUnavailable(e)) {
+      // Network/TLS failure talking to MongoDB: reconnect next time and tell the user plainly.
+      resetClient();
+      console.error(`[api] ${method} ${route}: database unreachable:`, e.message);
+      send(res, 503, { error: 'Can’t reach the database right now. Please try again in a minute.' });
+      return;
+    }
     const status = e instanceof HttpError ? e.status : 500;
     if (status >= 500) console.error(`[api] ${method} ${route}:`, e);
     const message = status >= 500 && !(e instanceof HttpError) ? 'Server error — please try again' : e.message;
