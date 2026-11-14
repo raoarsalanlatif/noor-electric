@@ -7,6 +7,7 @@ import {
 import InputsPanel from './InputsPanel';
 import Analytics from './Analytics';
 import BookingCard from './BookingCard';
+import ExportCard from './ExportCard';
 import { computePlan } from './sizing';
 import { DEFAULT_LOAD } from './appliances';
 import { CITIES, DEFAULT_SITE, ROOF_ITEMS } from './config';
@@ -233,6 +234,18 @@ export default function SolarPlanner() {
   const [tool, setTool] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const sceneRef = useRef(null);
+  const captureRef = useRef(null);
+  // A clean daytime picture of the finished install for the report.
+  const takeShot = useCallback(async () => {
+    if (!captureRef.current) return null;
+    const prev = { ...clock.current };
+    crewCtl.current.skip = true;
+    clock.current.hour = 11.5; clock.current.playing = false;
+    await new Promise((r) => setTimeout(r, 700)); // let the sky, shadows and panels settle
+    const shot = captureRef.current();
+    clock.current.hour = prev.hour; clock.current.playing = prev.playing;
+    return shot;
+  }, []);
   const fs = useFullscreen(sceneRef);
   const updateItems = useCallback((fn) => setSite((st) => ({ ...st, items: fn(st.items || []) })), []);
   const addItem = useCallback((type, x = 0, z = 0) => {
@@ -334,7 +347,7 @@ export default function SolarPlanner() {
           <SceneWrap $status={plan.status} ref={sceneRef} $full={fs.active}>
             <Suspense fallback={<Loading>Building your roof…</Loading>}>
               <RoofScene plan={plan} roof={roof} site={site} lat={location.lat} season={season}
-                clock={clock} onHour={onHour} crewCtl={crewCtl} onProgress={onProgress} editor={editor} />
+                clock={clock} onHour={onHour} crewCtl={crewCtl} onProgress={onProgress} editor={editor} captureRef={captureRef} />
             </Suspense>
             {editing && (() => {
               const sel = plan.layout.obstacles.find((o) => o.id === selectedId);
@@ -414,6 +427,7 @@ export default function SolarPlanner() {
           )}
 
           <Analytics plan={plan} hour={k} />
+          <ExportCard plan={plan} roof={roof} load={load} takeShot={takeShot} disabled={editing} />
           <BookingCard plan={plan} />
           <p style={{ color: t.muted, fontSize: '0.78rem', margin: 0 }}>
             Indicative estimate based on average sun hours for {plan.city.name} ({season === 'annual' ? 'year average' : season}) and typical appliance usage. Prices and tariffs are illustrative; final design is confirmed after a site survey.
