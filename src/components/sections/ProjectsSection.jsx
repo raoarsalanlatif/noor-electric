@@ -5,7 +5,7 @@ import { faLocationDot, faCircleCheck, faArrowRight, faBolt } from '@fortawesome
 import { faFacebookF } from '@fortawesome/free-brands-svg-icons';
 import { brand, fonts } from '../../styles/variables';
 import { projects, company } from '../../content/company';
-import { Section, Container, Eyebrow, Heading, Lead, SectionHead, ButtonA, ButtonLink, Reveal } from '../ui/primitives';
+import { Section, Container, Eyebrow, Heading, Lead, SectionHead, ButtonA, ButtonLink, Reveal, Tilt } from '../ui/primitives';
 import { usePublicContent, assetUrl } from '../../lib/publicContent';
 
 const Featured = styled.div`
@@ -117,7 +117,7 @@ function ProjectsSection({ tone, limit }) {
         </SectionHead>
         <Featured>
           {list.map((p, i) => (
-            <Reveal key={p._id || p.id || p.title} delay={(i % 3) * 0.08}><ProjectCard p={p} /></Reveal>
+            <Reveal key={p._id || p.id || p.title} delay={(i % 3) * 0.08}><Tilt max={5}><ProjectCard p={p} /></Tilt></Reveal>
           ))}
         </Featured>
         <More>
