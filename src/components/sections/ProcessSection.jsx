@@ -2,7 +2,7 @@ import styled from 'styled-components';
 import { brand, fonts } from '../../styles/variables';
 import { Section, Container, Eyebrow, Heading, Lead, SectionHead, Reveal } from '../ui/primitives';
 
-const STEPS = [
+export const STEPS = [
   { title: 'Free consultation', text: 'Tell us about your bill, load and goals on a call or WhatsApp.' },
   { title: 'Site survey', text: 'An engineer visits to check roof space, shading, structure and wiring.' },
   { title: 'Design & quote', text: 'You get a system design, equipment list and a clear, itemised price.' },
