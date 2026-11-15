@@ -63,6 +63,10 @@ export async function getDb() {
       db.collection('payroll').createIndex({ month: 1, employeeId: 1 }, { unique: true }),
       db.collection('showcase').createIndex({ published: 1, order: 1 }),
       db.collection('reviews').createIndex({ published: 1, order: 1 }),
+      db.collection('stock_moves').createIndex({ itemId: 1, date: -1 }),
+      db.collection('stock_moves').createIndex({ projectId: 1 }),
+      db.collection('expenses').createIndex({ date: -1 }),
+      db.collection('expenses').createIndex({ projectId: 1 }),
     ]).catch((e) => { indexesReady = null; console.error('index error', e.message); });
   }
   return db;
