@@ -1,15 +1,19 @@
 /* eslint-disable react/prop-types */
-// The downloadable design report: three A4 pages rendered off-screen, then captured to PDF / images.
+// The downloadable design report: A4 pages rendered off-screen, then captured to PDF / images.
+// Pages: summary, roof plan, load; then shading analysis (when nearby buildings were entered),
+// month-by-month production with the 25-year outlook, and the parts list with the basis of the design.
 // `lang` picks the language: 'en' (default), 'ur' (Urdu, laid out right-to-left) or 'both'.
-import { createContext, forwardRef, useContext } from 'react';
+import { createContext, forwardRef, useContext, useMemo } from 'react';
 import styled from 'styled-components';
 import { company, ceo } from '../../../content/company';
 import { APPLIANCE_MAP } from '../appliances';
-import { ROOF_ITEMS, STRUCTURES } from '../config';
+import { ROOF_ITEMS, STRUCTURES, PLANNER_CONFIG as CFG } from '../config';
+import { yearlyOutlook } from '../yearly';
+import ShadowPlanSvg from './ShadowPlanSvg';
 import { SEASONS } from '../../three/sun';
 import RoofPlanSvg from './RoofPlanSvg';
 import { facingLabel } from '../shading';
-import { T, APPLIANCE_UR, ROOF_ITEM_UR, STRUCTURE_UR, SEASON_UR, FACING_UR } from './i18n';
+import { T, APPLIANCE_UR, ROOF_ITEM_UR, STRUCTURE_UR, SEASON_UR, FACING_UR, MONTHS_UR, basisNotes } from './i18n';
 
 export const PAGE_W = 794; // A4 at 96 dpi
 export const PAGE_H = 1123;
@@ -93,16 +97,27 @@ const Table = styled.table`
   th { text-align: start; background: ${B.soft}; color: ${B.navy}; font-weight: 700; padding: 5px 8px; border-bottom: 1px solid ${B.line}; vertical-align: bottom; }
   th .ur { display: block; font-weight: 400; font-size: 9.5px; line-height: 1.4; }
   th.n .ur { text-align: right; }
-  td { padding: 2px 8px; border-bottom: 1px solid ${B.line}; vertical-align: middle; }
+  td { padding: 3px 8px 5px; border-bottom: 1px solid ${B.line}; vertical-align: middle; }
   td .ur { display: block; font-size: 9.5px; color: ${B.muted}; line-height: 1.4; text-align: left; }
   td.n, th.n { text-align: end; }
   td.n .ur { text-align: right; }
-  tr.tot td .ur { display: inline; }
+  tr.tot td .ur, tr.one td .ur { display: inline; }
   td .ur.solo, th .ur.solo { font-size: 11.5px; color: inherit; font-weight: inherit; line-height: 1.7; text-align: start; }
   td.n .ur.solo, th.n .ur.solo { text-align: end; }
   td .ur.solo.inl { display: inline; }
   tr.tot td { font-weight: 700; background: ${B.soft}; }
   tr.sel td { background: #fff7ed; }
+`;
+
+const Three = styled.div`
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+  > div { border: 1px solid ${B.line}; border-radius: 10px; overflow: hidden; display: grid; place-items: center; }
+`;
+
+const Scale = styled.div`
+  margin-top: 6px; font-size: 10px; color: ${B.muted};
+  i { display: block; height: 7px; border-radius: 99px; background: linear-gradient(90deg, #22c55e, #f59e0b, #ef4444); }
+  div { display: flex; justify-content: space-between; margin-top: 2px; }
 `;
 
 const Two = styled.div`display: grid; grid-template-columns: ${(p) => p.$cols || '1fr 1fr'}; gap: 14px;`;
@@ -189,7 +204,7 @@ function Footer({ n, total, designNo }) {
   );
 }
 
-const DesignReport = forwardRef(function DesignReport({ plan, roof, load, customer, shot, designNo, date, logo, lang = 'en' }, ref) {
+const DesignReport = forwardRef(function DesignReport({ plan, roof, load, customer, shot, designNo, date, logo, lang = 'en', planInput }, ref) {
   const S = plan.structure;
   const panelsWanted = plan.chosen.panels;
   const ph = plan.site.parapetH || 0;
@@ -205,6 +220,19 @@ const DesignReport = forwardRef(function DesignReport({ plan, roof, load, custom
   items.forEach((o) => { const k = `${o.type}${o.onTop ? ':top' : ''}`; itemCounts[k] = (itemCounts[k] || 0) + 1; });
   const seasonEn = (SEASONS[plan.season] || SEASONS.annual).label;
   const { shading } = plan;
+  // month-by-month and 25-year figures (twelve planner runs for this same system)
+  const outlook = useMemo(() => (planInput ? yearlyOutlook(planInput, plan) : null), [planInput, plan]);
+  const hasShade = shading.buildings.length > 0;
+  const total = 3 + (hasShade ? 1 : 0) + (outlook ? 2 : 0);
+  const pageYear = hasShade ? 5 : 4;
+  const monthT = (i) => [outlook.months[i].name, MONTHS_UR[i]];
+  const byShade = outlook ? outlook.months.map((m, i) => ({ i, pct: m.shadePct })).sort((a, b) => b.pct - a.pct) : [];
+  const where = (b) => {
+    const gx = Math.abs(b.x) - b.w / 2 - roof.width / 2; const gz = Math.abs(b.z) - b.d / 2 - roof.length / 2;
+    const side = gz >= gx ? (b.z > 0 ? T.sideFront : T.sideBack) : (b.x > 0 ? T.sideRight : T.sideLeft);
+    return { side, gap: Math.max(0, gx, gz) };
+  };
+  const barMax = outlook ? Math.max(...outlook.months.map((m) => m.kWh), 1) : 1;
   const facingT = [facingLabel(shading.facing), FACING_UR[shading.facing] || facingLabel(shading.facing)];
   const peak = Math.max(...plan.solarKw, ...plan.loadKw, 0.1);
   const meta = [
@@ -243,7 +271,7 @@ const DesignReport = forwardRef(function DesignReport({ plan, roof, load, custom
             <figcaption>{lang !== 'ur' && <span>{T.view3d[0]}</span>}{lang !== 'en' && <span className="ur">{T.view3d[1]}</span>}</figcaption>
           </Shot>
         </Body>
-        <Footer n={1} total={3} designNo={designNo} />
+        <Footer n={1} total={total} designNo={designNo} />
       </Page>
 
       {/* ------------------------------ page 2 ------------------------------ */}
@@ -307,7 +335,7 @@ const DesignReport = forwardRef(function DesignReport({ plan, roof, load, custom
             </div>
           </Two>
         </Body>
-        <Footer n={2} total={3} designNo={designNo} />
+        <Footer n={2} total={total} designNo={designNo} />
       </Page>
 
       {/* ------------------------------ page 3 ------------------------------ */}
@@ -406,8 +434,193 @@ const DesignReport = forwardRef(function DesignReport({ plan, roof, load, custom
             </Contact>
           </div>
         </Body>
-        <Footer n={3} total={3} designNo={designNo} />
+        <Footer n={3} total={total} designNo={designNo} />
       </Page>
+
+      {/* ------------------------- shading analysis ------------------------- */}
+      {hasShade && (
+        <Page className="report-page" data-lang={lang}>
+          <Header logo={logo} />
+          <Body>
+            <Hd t={T.shadingTitle} />
+            <Kpis>
+              <div className="hi"><Bi t={T.lossSeason} /><div className="v">{Math.round(shading.lossPct)}%</div><div className="s"><L t={[seasonEn, SEASON_UR[plan.season] || seasonEn]} sep=" · " /></div></div>
+              <div className="hi"><Bi t={T.lossYear} /><div className="v">{outlook ? `${Math.round(outlook.year.shadePct)}%` : '—'}</div></div>
+              <div><Bi t={T.lossWorst} /><div className="v">{outlook ? `${Math.round(byShade[0].pct)}%` : '—'}</div><div className="s">{outlook && <L t={monthT(byShade[0].i)} sep=" · " />}</div></div>
+              <div><Bi t={T.lossBest} /><div className="v">{outlook ? `${Math.round(byShade[11].pct)}%` : '—'}</div><div className="s">{outlook && <L t={monthT(byShade[11].i)} sep=" · " />}</div></div>
+            </Kpis>
+            <Hd t={T.shadowViews} />
+            <Three>
+              {[[9, '9 am'], [12, '12 noon'], [15, '3 pm']].map(([h, label]) => (
+                <div key={h}><ShadowPlanSvg plan={plan} roof={roof} hour={h} title={`Winter · ${label}`} uid={`h${h}`} width={236} height={lang === 'both' ? 270 : 300} /></div>
+              ))}
+            </Three>
+            <Legend>
+              <span><i style={{ background: '#0f172a', opacity: 0.5 }} /><L t={T.legendShadow} sep=" " /></span>
+              <span><i style={{ background: '#cbd5e1' }} /><L t={T.legendBuilding} sep=" " /></span>
+              <span><i style={{ background: '#f59e0b', borderRadius: 99, width: 10 }} /><L t={T.legendSun} sep=" " /></span>
+              <span><i style={{ background: '#1e3a8a' }} /><L t={T.legendPanel} sep=" " /></span>
+            </Legend>
+            <Two $cols="1.15fr 1fr">
+              <div>
+                <Hd t={T.lossPerPanel} style={{ marginBottom: 6 }} />
+                <div style={{ border: `1px solid ${B.line}`, borderRadius: 10, overflow: 'hidden' }}>
+                  <ShadowPlanSvg plan={plan} roof={roof} uid="loss" width={392} height={lang === 'both' ? 330 : 400} margin={0.12} losses={outlook ? outlook.year.perPanel : undefined} />
+                </div>
+                <Scale><i /><div><span><P t={T.noLoss} /></span><span><P t={T.halfLoss} /></span></div></Scale>
+              </div>
+              <div>
+                <Hd t={T.buildings} style={{ marginBottom: 6 }} />
+                <Table>
+                  <thead><tr><th>#</th><th><L t={T.buildingSize} /></th><th className="n"><L t={T.buildingHeight} /></th></tr></thead>
+                  <tbody>
+                    {shading.buildings.map((b, i) => {
+                      const w = where(b);
+                      return (
+                        <tr key={b.id}>
+                          <td>{i + 1}</td>
+                          <td><N>{b.w.toFixed(1)} × {b.d.toFixed(1)} m</N><span className="ur" style={{ fontFamily: 'inherit', direction: 'inherit' }}><N>{w.gap.toFixed(1)} m</N> <P inline t={w.side} /></span></td>
+                          <td className="n"><b>{b.h.toFixed(1)} m</b> ({Math.round(b.h / 0.3048)} ft)</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </Table>
+              </div>
+            </Two>
+          </Body>
+          <Footer n={4} total={total} designNo={designNo} />
+        </Page>
+      )}
+
+      {/* ------------------- production month by month ------------------- */}
+      {outlook && (
+        <Page className="report-page" data-lang={lang}>
+          <Header logo={logo} />
+          <Body>
+            <Hd t={T.yearTitle} />
+            <svg width="738" height="150" viewBox="0 0 738 150" style={{ flexShrink: 0 }}>
+              <rect x="0" y="0" width="738" height="150" fill="#fff" />
+              {outlook.months.map((m, i) => {
+                const x = 14 + i * 60; const h = (m.kWh / barMax) * 100;
+                return (
+                  <g key={m.name}>
+                    <rect x={x} y={122 - h} width="42" height={h} rx="3" fill="#f7b31b" />
+                    <text x={x + 21} y={116 - h} fontSize="10" fontWeight="700" textAnchor="middle" fill="#0a1f4d" fontFamily="Inter, Arial">{Math.round(m.kWh)}</text>
+                    <text x={x + 21} y="138" fontSize="10" textAnchor="middle" fill="#64748b" fontFamily="Inter, Arial">{m.name.slice(0, 3)}</text>
+                  </g>
+                );
+              })}
+              <line x1="8" y1="122" x2="730" y2="122" stroke="#cbd5e1" />
+            </svg>
+            <Table>
+              <thead>
+                <tr>
+                  <th><L t={T.month} /></th>
+                  <th className="n"><L t={T.sunHours} /></th>
+                  <th className="n"><L t={T.kwhDay} /></th>
+                  <th className="n"><L t={T.kwhMonth} /></th>
+                  {hasShade && <th className="n"><L t={T.shade} /></th>}
+                  <th className="n"><L t={T.saving} /></th>
+                </tr>
+              </thead>
+              <tbody>
+                {outlook.months.map((m, i) => (
+                  <tr key={m.name} className="one">
+                    <td><L t={monthT(i)} sep=" · " /></td>
+                    <td className="n">{m.sunHours.toFixed(1)} h</td>
+                    <td className="n">{m.kWhDay.toFixed(1)}</td>
+                    <td className="n">{Math.round(m.kWh).toLocaleString('en-PK')}</td>
+                    {hasShade && <td className="n" style={{ color: m.shadePct >= 3 ? B.amber : undefined }}>{Math.round(m.shadePct)}%</td>}
+                    <td className="n">{pkr(m.saving)}</td>
+                  </tr>
+                ))}
+                <tr className="tot">
+                  <td><L t={T.yearTotal} sep=" · " /></td>
+                  <td className="n" />
+                  <td className="n">{(outlook.year.kWh / 365).toFixed(1)}</td>
+                  <td className="n">{Math.round(outlook.year.kWh).toLocaleString('en-PK')} kWh</td>
+                  {hasShade && <td className="n">{Math.round(outlook.year.shadePct)}%</td>}
+                  <td className="n">{pkr(outlook.year.saving)}</td>
+                </tr>
+              </tbody>
+            </Table>
+
+            <Hd t={T.lifeTitle} />
+            <Kpis>
+              <div><Bi t={T.year1Prod} /><div className="v">{Math.round(outlook.year.kWh).toLocaleString('en-PK')} kWh</div></div>
+              <div><Bi t={T.year1Saving} /><div className="v">{pkr(outlook.year.saving)}</div></div>
+              <div className="hi"><Bi t={T.paybackYear} /><div className="v">{outlook.paybackYear ? <><P t={T.yearNo} /> {outlook.paybackYear}</> : '—'}</div></div>
+              <div className="hi"><Bi t={T.lifeSaving} /><div className="v">{pkr(outlook.lifeSaving)}</div></div>
+            </Kpis>
+            <Table>
+              <thead>
+                <tr>
+                  <th><L t={T.yearNo} /></th>
+                  <th className="n"><L t={T.production} /></th>
+                  <th className="n"><L t={T.savingThatYear} /></th>
+                  <th className="n"><L t={T.cumSaving} /></th>
+                  <th className="n"><L t={T.netAfterCost} /></th>
+                </tr>
+              </thead>
+              <tbody>
+                {[1, 5, 10, 15, 20, 25].map((yr) => {
+                  const r = outlook.life[yr - 1];
+                  return (
+                    <tr key={yr}>
+                      <td>{yr}</td>
+                      <td className="n">{Math.round(r.kWh).toLocaleString('en-PK')} kWh</td>
+                      <td className="n">{pkr(r.saving)}</td>
+                      <td className="n">{pkr(r.cumSaving)}</td>
+                      <td className="n" style={{ color: r.net >= 0 ? B.green : B.red, fontWeight: 700 }}>{r.net < 0 ? '−' : ''}{pkr(Math.abs(r.net))}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </Table>
+          </Body>
+          <Footer n={pageYear} total={total} designNo={designNo} />
+        </Page>
+      )}
+
+      {/* ------------------ parts list and basis of design ------------------ */}
+      {outlook && (
+        <Page className="report-page" data-lang={lang}>
+          <Header logo={logo} />
+          <Body>
+            <Hd t={T.partsTitle} />
+            <Table>
+              <thead><tr><th><L t={T.item} /></th><th><L t={T.spec} /></th><th className="n"><L t={T.qty} /></th></tr></thead>
+              <tbody>
+                <tr><td><L t={T.partPanels} /></td><td><N>{plan.panel.watts} W · {plan.panel.width.toFixed(2)} × {plan.panel.length.toFixed(2)} m</N></td><td className="n"><b>{plan.installed}</b></td></tr>
+                <tr><td><L t={T.partInverter} /></td><td><N>{plan.chosen.inverterKW} kW</N> · <P inline t={plan.chosen.batteryKWh ? T.hybrid : T.onGrid} /></td><td className="n"><b>1</b></td></tr>
+                {plan.chosen.batteryKWh > 0 && <tr><td><L t={T.partBattery} /></td><td><N>{plan.chosen.batteryKWh} kWh</N></td><td className="n"><b>1</b></td></tr>}
+                <tr><td><L t={T.partStructure} /></td><td><L t={[S.label, STRUCTURE_UR[S.key]]} /></td><td className="n"><N>{plan.systemKW.toFixed(2)} kW</N></td></tr>
+                <tr><td><L t={T.partProtection} /></td><td /><td className="n"><b>1</b></td></tr>
+                <tr><td><L t={T.partCable} /></td><td /><td className="n"><P inline t={T.asRequired} /></td></tr>
+                <tr><td><L t={T.partEarthing} /></td><td /><td className="n"><P inline t={T.asRequired} /></td></tr>
+                <tr><td><L t={T.partInstall} /></td><td /><td className="n"><P inline t={T.included} /></td></tr>
+              </tbody>
+            </Table>
+
+            <Hd t={T.costTitle} />
+            <Table>
+              <tbody>
+                <tr><td><L t={T.costSystem} /></td><td className="n">{pkr(plan.systemKW * CFG.costPerKW)}</td></tr>
+                <tr><td><L t={T.costStructure} /></td><td className="n">{pkr(plan.structureCost)}</td></tr>
+                {plan.chosen.batteryKWh > 0 && <tr><td><L t={T.costBattery} /></td><td className="n">{pkr(plan.chosen.batteryKWh * CFG.batteryCostPerKWh)}</td></tr>}
+                <tr className="tot"><td><L t={T.estCost} sep=" · " /></td><td className="n">{pkr(plan.cost)}</td></tr>
+              </tbody>
+            </Table>
+
+            <Hd t={T.basisTitle} />
+            <Notes $one={lang !== 'both'} style={{ gap: 6 }}>
+              {basisNotes(CFG, plan).map((n) => <p key={n[0]}>{lang !== 'ur' && <span>{n[0]}</span>}{lang !== 'en' && <span className="ur">{n[1]}</span>}</p>)}
+            </Notes>
+          </Body>
+          <Footer n={pageYear + 1} total={total} designNo={designNo} />
+        </Page>
+      )}
     </div>
     </LangCtx.Provider>
   );

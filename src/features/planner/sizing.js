@@ -1,6 +1,6 @@
 import { APPLIANCE_MAP, PROFILES } from './appliances';
 import { PLANNER_CONFIG as CFG, PANEL_OPTIONS, INVERTER_SIZES, CITIES, DEFAULT_SITE, STRUCTURES, STRUCTURE_ORDER } from './config';
-import { dailyShape, SEASONS } from '../three/sun';
+import { dailyShape, seasonOf } from '../three/sun';
 import { computeShading, facingLabel } from './shading';
 
 const TILT = (15 * Math.PI) / 180;
@@ -199,7 +199,7 @@ const sum = (arr) => arr.reduce((a, b) => a + b, 0);
 export function computePlan(input) {
   const { load, cityId, roof, panelWatts, mode, custom, withBattery, offGrid, location, season = 'annual', site = DEFAULT_SITE } = input;
   const city = location || CITIES.find((c) => c.id === cityId) || CITIES[0];
-  const sunHours = city.sunHours * (SEASONS[season] || SEASONS.annual).sunFactor;
+  const sunHours = city.sunHours * seasonOf(season).sunFactor;
   const panel = PANEL_OPTIONS.find((p) => p.watts === panelWatts) || PANEL_OPTIONS[1];
 
   const { kw: loadKw, running } = buildLoadCurve(load);

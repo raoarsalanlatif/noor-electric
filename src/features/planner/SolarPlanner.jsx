@@ -293,10 +293,11 @@ export default function SolarPlanner() {
     onMoveItem: moveItem,
   }), [editing, tool, selectedId, aroundHouse, addItem, moveItem]);
 
-  const plan = useMemo(
-    () => computePlan({ load, location, season, site, roof, panelWatts, mode, custom, withBattery, offGrid }),
+  const planInput = useMemo(
+    () => ({ load, location, season, site, roof, panelWatts, mode, custom, withBattery, offGrid }),
     [load, location, season, site, roof, panelWatts, mode, custom, withBattery, offGrid],
   );
+  const plan = useMemo(() => computePlan(planInput), [planInput]);
 
   const togglePlay = () => {
     clock.current.playing = !clock.current.playing;
@@ -442,7 +443,7 @@ export default function SolarPlanner() {
           )}
 
           <Analytics plan={plan} hour={k} />
-          <ExportCard plan={plan} roof={roof} load={load} takeShot={takeShot} disabled={editing} />
+          <ExportCard plan={plan} roof={roof} load={load} takeShot={takeShot} disabled={editing} planInput={planInput} />
           <BookingCard plan={plan} />
           <p style={{ color: t.muted, fontSize: '0.78rem', margin: 0 }}>
             Indicative estimate based on average sun hours for {plan.city.name} ({season === 'annual' ? 'year average' : season}) and typical appliance usage. Prices and tariffs are illustrative; final design is confirmed after a site survey.

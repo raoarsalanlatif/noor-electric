@@ -25,6 +25,8 @@ export const PLANNER_CONFIG = {
   shadeNorth: 1.3,
   shadeSide: 0.35,
   accessGap: 0.3, // walkway kept around objects for maintenance
+  panelDegradationPerYear: 0.005, // panels make about 0.5% less each year
+  systemLifeYears: 25,
   // Share of a panel's output that is lost while it is in a building's shadow (the rest is diffuse sky light).
   shadeBeamShare: 0.85,
 };

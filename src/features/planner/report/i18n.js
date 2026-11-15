@@ -63,6 +63,63 @@ export const T = {
   faces: ['Front of house faces', 'گھر کا رخ'],
   shadeLoss: ['Shade from nearby buildings', 'قریبی عمارتوں کے سائے سے نقصان'],
   frontPlain: ['Front of the house', 'گھر کا سامنے والا حصہ'],
+  shadingTitle: ['Shading analysis', 'سائے کا تجزیہ'],
+  shadowViews: ['Shadows on the roof in winter (the worst season)', 'سردیوں میں چھت پر سایہ (سب سے مشکل موسم)'],
+  lossPerPanel: ['Energy each panel loses to shade over the year', 'سال بھر میں ہر پینل کا سائے سے نقصان'],
+  lossYear: ['Shade loss over the year', 'سال بھر میں سائے سے نقصان'],
+  lossWorst: ['Worst month', 'سب سے زیادہ نقصان والا مہینہ'],
+  lossBest: ['Best month', 'سب سے کم نقصان والا مہینہ'],
+  lossSeason: ['Shade loss in the selected season', 'منتخب موسم میں سائے سے نقصان'],
+  buildings: ['Nearby buildings', 'قریبی عمارتیں'],
+  buildingSize: ['Width × depth', 'چوڑائی × گہرائی'],
+  buildingHeight: ['Height', 'اونچائی'],
+  buildingWhere: ['Position', 'مقام'],
+  sideFront: ['in front of the house', 'گھر کے سامنے'],
+  sideBack: ['behind the house', 'گھر کے پیچھے'],
+  sideRight: ['to the right (seen from the street)', 'دائیں طرف (گلی سے دیکھیں تو)'],
+  sideLeft: ['to the left (seen from the street)', 'بائیں طرف (گلی سے دیکھیں تو)'],
+  legendShadow: ['Shadow', 'سایہ'],
+  legendBuilding: ['Nearby building (height)', 'قریبی عمارت (اونچائی)'],
+  legendSun: ['Direction of the sun', 'سورج کی سمت'],
+  noLoss: ['no loss', 'کوئی نقصان نہیں'],
+  halfLoss: ['50% or more lost', '50٪ یا زیادہ نقصان'],
+
+  yearTitle: ['Production month by month', 'ماہ بہ ماہ پیداوار'],
+  month: ['Month', 'مہینہ'],
+  kwhDay: ['kWh / day', 'یونٹس روزانہ'],
+  kwhMonth: ['kWh / month', 'یونٹس ماہانہ'],
+  shade: ['Shade loss', 'سائے سے نقصان'],
+  saving: ['Saving', 'بچت'],
+  yearTotal: ['Year', 'سال'],
+  lifeTitle: ['25-year outlook', '25 سالہ جائزہ'],
+  year1Prod: ['Production in year 1', 'پہلے سال کی پیداوار'],
+  year1Saving: ['Saving in year 1', 'پہلے سال کی بچت'],
+  paybackYear: ['System pays for itself', 'لاگت واپس آنے کا وقت'],
+  lifeSaving: ['Saving over 25 years', '25 سال میں کل بچت'],
+  yearNo: ['Year', 'سال'],
+  production: ['Production', 'پیداوار'],
+  savingThatYear: ['Saving that year', 'اس سال کی بچت'],
+  cumSaving: ['Saving so far', 'اب تک کی کل بچت'],
+  netAfterCost: ['After paying for the system', 'سسٹم کی لاگت نکال کر'],
+
+  partsTitle: ['Parts list', 'سامان کی فہرست'],
+  item: ['Item', 'سامان'],
+  spec: ['Specification', 'تفصیل'],
+  partPanels: ['Solar panels', 'سولر پینلز'],
+  partInverter: ['Inverter', 'انورٹر'],
+  partBattery: ['Lithium battery', 'لیتھیم بیٹری'],
+  partStructure: ['Mounting structure', 'ماؤنٹنگ اسٹرکچر'],
+  partProtection: ['DC / AC protection box (breakers, surge protection)', 'ڈی سی / اے سی پروٹیکشن باکس (بریکر، سرج پروٹیکشن)'],
+  partCable: ['Solar DC cable and connectors', 'سولر ڈی سی کیبل اور کنیکٹرز'],
+  partEarthing: ['Earthing', 'ارتھنگ'],
+  partInstall: ['Installation and commissioning', 'تنصیب اور کمیشننگ'],
+  asRequired: ['as required on site', 'سائٹ کے مطابق'],
+  included: ['included', 'شامل'],
+  costTitle: ['Cost estimate', 'لاگت کا تخمینہ'],
+  costSystem: ['Panels, inverter, wiring and installation', 'پینلز، انورٹر، وائرنگ اور تنصیب'],
+  costStructure: ['Mounting structure', 'ماؤنٹنگ اسٹرکچر'],
+  costBattery: ['Battery', 'بیٹری'],
+  basisTitle: ['How these numbers were calculated', 'یہ اعداد و شمار کیسے نکالے گئے'],
   legendPanel: ['Solar panel', 'سولر پینل'],
   legendItem: ['Tank / room / AC', 'ٹینکی / کمرہ / اے سی'],
   legendShade: ['Kept clear (walkway & shadow)', 'خالی جگہ (راستہ اور سایہ)'],
@@ -100,6 +157,40 @@ export const T = {
 export const FACING_UR = {
   180: 'جنوب', 135: 'جنوب مشرق', 225: 'جنوب مغرب', 90: 'مشرق', 270: 'مغرب', 45: 'شمال مشرق', 315: 'شمال مغرب', 0: 'شمال',
 };
+
+export const MONTHS_UR = ['جنوری', 'فروری', 'مارچ', 'اپریل', 'مئی', 'جون', 'جولائی', 'اگست', 'ستمبر', 'اکتوبر', 'نومبر', 'دسمبر'];
+
+/** The basis of the design, filled with this design's own figures. `c` = planner settings, `p` = the plan. */
+export const basisNotes = (c, p) => [
+  [
+    `Sun: ${p.city.sunHours} peak sun hours a day on average for ${p.city.name}; the sun follows its real path for the latitude and the time of year.`,
+    `دھوپ: ${p.city.name} کے لیے اوسطاً ${p.city.sunHours} گھنٹے روزانہ؛ سورج اپنے اصل راستے پر عرض بلد اور موسم کے مطابق چلتا ہے۔`,
+  ],
+  [
+    'The month-by-month split of sun hours is modelled (lowest in December, highest in June), not measured weather data.',
+    'ماہ بہ ماہ دھوپ کے گھنٹے ایک ماڈل سے لیے گئے ہیں (دسمبر میں سب سے کم، جون میں سب سے زیادہ)، یہ ناپا ہوا موسمی ڈیٹا نہیں۔',
+  ],
+  [
+    `System losses: ${Math.round((1 - c.performanceRatio) * 100)}% for heat, dust, wiring and the inverter. Panels are tilted 15° towards the front of the house.`,
+    `سسٹم کے نقصانات: گرمی، گرد، وائرنگ اور انورٹر کی مد میں ${Math.round((1 - c.performanceRatio) * 100)}٪۔ پینلز 15 ڈگری پر گھر کے سامنے کی طرف جھکے ہیں۔`,
+  ],
+  [
+    `Shade: sun rays are traced to five points on every panel, four times an hour. A panel in shadow is taken to lose ${Math.round(c.shadeBeamShare * 100)}% of its output. Only the buildings entered are counted; trees, poles and future construction are not.`,
+    `سایہ: ہر پینل کے پانچ مقامات تک سورج کی شعاعیں ہر گھنٹے میں چار بار جانچی جاتی ہیں۔ سائے میں آنے والا پینل اپنی ${Math.round(c.shadeBeamShare * 100)}٪ پیداوار کھو دیتا ہے۔ صرف درج کی گئی عمارتیں شمار ہوتی ہیں؛ درخت، کھمبے اور آئندہ کی تعمیرات شامل نہیں۔`,
+  ],
+  [
+    `Money: grid electricity at Rs ${c.tariffPerKWh} per unit, exported units credited at Rs ${c.exportRatePerKWh}. Tariffs are kept at today's level for all 25 years.`,
+    `رقم: گرڈ کی بجلی ${c.tariffPerKWh} روپے فی یونٹ، برآمد شدہ یونٹ ${c.exportRatePerKWh} روپے۔ ٹیرف 25 سال تک آج کی سطح پر رکھا گیا ہے۔`,
+  ],
+  [
+    `Ageing: panels make ${(c.panelDegradationPerYear * 100).toFixed(1)}% less each year. Battery or inverter replacement during the 25 years is not included.`,
+    `عمر: پینلز کی پیداوار ہر سال ${(c.panelDegradationPerYear * 100).toFixed(1)}٪ کم ہوتی ہے۔ 25 سال کے دوران بیٹری یا انورٹر کی تبدیلی شامل نہیں۔`,
+  ],
+  [
+    'Prices are indicative. The final design, shading, roof strength and prices are confirmed after a site survey.',
+    'قیمتیں تخمینی ہیں۔ حتمی ڈیزائن، سایہ، چھت کی مضبوطی اور قیمتیں سائٹ سروے کے بعد طے ہوں گی۔',
+  ],
+];
 
 export const SEASON_UR = { annual: 'سالانہ اوسط', summer: 'گرمی', winter: 'سردی' };
 
