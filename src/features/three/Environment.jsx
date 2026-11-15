@@ -5,14 +5,19 @@ import { Sky, Stars } from '@react-three/drei';
 import * as THREE from 'three';
 import { sunPosition, sunFor, daylightFromAlt } from './sun';
 import BrandSign from './BrandSign';
-import { grassTexture, roadTexture, plasterTexture, brickTexture } from './textures';
+import { grassTexture, lawnTexture, roadTexture, plasterTexture, brickTexture } from './textures';
 
+const SKY_LAYER = 5; // the layer the environment-map camera sees: the sky and a ground-coloured disc
 const FOG_DAY = new THREE.Color('#cfe2f3');
 const FOG_DUSK = new THREE.Color('#e9b38a');
 const FOG_NIGHT = new THREE.Color('#0a1022');
 
 /** Physical sky, sun/moon lights and stars driven by a shared clock ref ({ hour }). */
-export function SkySystem({ clock, lat, season, shadowSize = 30, facing = 180 }) {
+/**
+ * `reflections` (Solar Planner): the sky is also captured as an environment map, so glass and metal reflect it
+ * and the scene gets soft sky light; the plain ambient lights are turned down to match.
+ */
+export function SkySystem({ clock, lat, season, shadowSize = 30, facing = 180, reflections = false }) {
   const sky = useRef();
   const sun = useRef();
   const moon = useRef();
@@ -22,6 +27,24 @@ export function SkySystem({ clock, lat, season, shadowSize = 30, facing = 180 })
   const { scene, gl } = useThree();
   const target = useMemo(() => new THREE.Object3D(), []);
   const tmp = useMemo(() => new THREE.Color(), []);
+  // sky → small cube map → blurred environment map, refreshed only when the sun has moved noticeably
+  const env = useMemo(() => {
+    if (!reflections) return null;
+    const rt = new THREE.WebGLCubeRenderTarget(64, { type: THREE.HalfFloatType });
+    const cam = new THREE.CubeCamera(1, 6000, rt);
+    cam.layers.set(SKY_LAYER);
+    cam.position.set(0, 3, 0);
+    return { rt, cam, pmrem: new THREE.PMREMGenerator(gl), tex: null, hour: -99 };
+  }, [reflections, gl]);
+  useEffect(() => {
+    if (!env) return undefined;
+    env.hour = -99;
+    return () => {
+      scene.environment = null;
+      if (env.tex) env.tex.dispose();
+      env.rt.dispose(); env.pmrem.dispose();
+    };
+  }, [env, scene, lat, season, facing]);
 
   useEffect(() => {
     scene.fog = new THREE.Fog(FOG_DAY, 70, 220);
@@ -36,12 +59,25 @@ export function SkySystem({ clock, lat, season, shadowSize = 30, facing = 180 })
     if (sky.current) sky.current.material.uniforms.sunPosition.value.set(x * 1000, y * 1000, z * 1000);
     sun.current.position.set(x * 60, Math.max(y, 0.02) * 60, z * 60);
     sun.current.target = target;
-    sun.current.intensity = alt > 0 ? 0.4 + d * 2.6 : 0;
+    sun.current.intensity = alt > 0 ? 0.4 + d * (reflections ? 2.9 : 2.6) : 0;
     sun.current.color.setHSL(0.1, 0.9, 0.62 + d * 0.3);
     moon.current.intensity = alt > 0 ? 0 : 0.35;
-    amb.current.intensity = 0.12 + d * 0.35;
-    hemi.current.intensity = 0.18 + d * 0.55;
-    gl.toneMappingExposure = 0.55 + (1 - d) * 0.15;
+    amb.current.intensity = reflections ? 0.08 + d * 0.12 : 0.12 + d * 0.35;
+    hemi.current.intensity = reflections ? 0.12 + d * 0.28 : 0.18 + d * 0.55;
+    gl.toneMappingExposure = reflections ? 0.5 + (1 - d) * 0.18 : 0.55 + (1 - d) * 0.15;
+    if (env && sky.current) {
+      sky.current.layers.enable(SKY_LAYER);
+      const h = clock.current.hour;
+      if (Math.abs(h - env.hour) > 0.4) {
+        env.hour = h;
+        env.cam.update(gl, scene);
+        const next = env.pmrem.fromCubemap(env.rt.texture); // a render target; the old one is released
+        if (env.tex) env.tex.dispose();
+        env.tex = next;
+        scene.environment = next.texture;
+      }
+      scene.environmentIntensity = 0.04 + d * 0.26;
+    }
     if (stars.current) stars.current.visible = alt < -3;
     if (d > 0.35) tmp.copy(FOG_DAY);
     else if (alt > -2) tmp.copy(FOG_DUSK).lerp(FOG_DAY, d / 0.35);
@@ -52,6 +88,12 @@ export function SkySystem({ clock, lat, season, shadowSize = 30, facing = 180 })
   return (
     <>
       <Sky ref={sky} distance={4500} turbidity={6} rayleigh={1.6} mieCoefficient={0.006} mieDirectionalG={0.85} />
+      {reflections && (
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2, 0]} layers={SKY_LAYER}>
+          <circleGeometry args={[3000, 24]} />
+          <meshBasicMaterial color="#6f7f5a" fog={false} />
+        </mesh>
+      )}
       <group ref={stars}><Stars radius={300} depth={60} count={2500} factor={5} fade speed={0.5} /></group>
       <ambientLight ref={amb} />
       <hemisphereLight ref={hemi} args={['#cfe8ff', '#4a6a35', 0.4]} />
@@ -145,10 +187,10 @@ function NeighbourHouse({ position, size, windowsRef, idx }) {
 }
 
 /** Ground, road, boundary wall, trees, street lamps and neighbouring houses. */
-export function Neighbourhood({ roof, clock, lat, season, compact = false, houses = true }) {
+export function Neighbourhood({ roof, clock, lat, season, compact = false, houses = true, lawn = false }) {
   const W = roof.width; const L = roof.length;
   const windows = useRef([]);
-  const grass = useMemo(() => grassTexture([50, 50]), []);
+  const grass = useMemo(() => (lawn ? lawnTexture([36, 36]) : grassTexture([50, 50])), [lawn]);
   const road = useMemo(() => roadTexture([24, 1]), []);
   const brick = useMemo(() => brickTexture([1, 1]), []);
   const plotW = W + 6; const plotL = L + 7;
