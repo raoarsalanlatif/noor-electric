@@ -8,7 +8,8 @@ import { APPLIANCE_MAP } from '../appliances';
 import { ROOF_ITEMS, STRUCTURES } from '../config';
 import { SEASONS } from '../../three/sun';
 import RoofPlanSvg from './RoofPlanSvg';
-import { T, APPLIANCE_UR, ROOF_ITEM_UR, STRUCTURE_UR, SEASON_UR } from './i18n';
+import { facingLabel } from '../shading';
+import { T, APPLIANCE_UR, ROOF_ITEM_UR, STRUCTURE_UR, SEASON_UR, FACING_UR } from './i18n';
 
 export const PAGE_W = 794; // A4 at 96 dpi
 export const PAGE_H = 1123;
@@ -203,6 +204,8 @@ const DesignReport = forwardRef(function DesignReport({ plan, roof, load, custom
   const itemCounts = {};
   items.forEach((o) => { const k = `${o.type}${o.onTop ? ':top' : ''}`; itemCounts[k] = (itemCounts[k] || 0) + 1; });
   const seasonEn = (SEASONS[plan.season] || SEASONS.annual).label;
+  const { shading } = plan;
+  const facingT = [facingLabel(shading.facing), FACING_UR[shading.facing] || facingLabel(shading.facing)];
   const peak = Math.max(...plan.solarKw, ...plan.loadKw, 0.1);
   const meta = [
     [T.preparedFor, customer?.name || '—'],
@@ -255,7 +258,7 @@ const DesignReport = forwardRef(function DesignReport({ plan, roof, load, custom
             <span><i style={{ background: '#1e3a8a' }} /><L t={T.legendPanel} sep=" " /></span>
             <span><i style={{ background: '#4b5563' }} /><L t={T.legendItem} sep=" " /></span>
             <span><i style={{ background: '#fed7aa' }} /><L t={T.legendShade} sep=" " /></span>
-            <span><i style={{ background: '#f47b20' }} /><L t={T.front} sep=" " /></span>
+            <span><i style={{ background: '#f47b20' }} /><L t={shading.facing === 180 ? T.front : T.frontPlain} sep=" " /></span>
           </Legend>
           <Two>
             <div>
@@ -265,6 +268,7 @@ const DesignReport = forwardRef(function DesignReport({ plan, roof, load, custom
                   <tr><td><L t={T.roofSize} /></td><td className="n"><b>{roof.width} m × {roof.length} m</b></td></tr>
                   <tr><td><L t={T.roofArea} /></td><td className="n">{Math.round(roof.width * roof.length)} m² ({Math.round(roof.width * roof.length * 10.764)} sq ft)</td></tr>
                   <tr><td><L t={T.storeys} /></td><td className="n">{plan.site.storeys}</td></tr>
+                  <tr><td><L t={T.faces} /></td><td className="n"><L t={facingT} /></td></tr>
                   <tr><td><L t={T.parapet} /></td><td className="n">{ph ? `${Math.round(ph / 0.3048)} ft` : <L t={T.none} sep=" · " />}</td></tr>
                   <tr><td><L t={T.panelSize} /></td><td className="n">{plan.panel.watts} W · {plan.panel.width.toFixed(2)} × {plan.panel.length.toFixed(2)} m</td></tr>
                   <tr><td><L t={T.panelFits} /></td><td className="n"><b>{plan.layout.maxPanels}</b> / <P inline t={[T.panelsRequired[0].toLowerCase(), T.panelsRequired[1]]} /> <b>{panelsWanted}</b></td></tr>
@@ -372,6 +376,9 @@ const DesignReport = forwardRef(function DesignReport({ plan, roof, load, custom
                   <tr><td><L t={T.season} /></td><td className="n"><L t={[seasonEn, SEASON_UR[plan.season] || seasonEn]} /></td></tr>
                   <tr><td><L t={T.sunHours} /></td><td className="n">{plan.sunHours.toFixed(1)} h</td></tr>
                   <tr><td><L t={[`${T.solarPerDay[0]} (${T.perDay[0]})`, `${T.solarPerDay[1]} (${T.perDay[1]})`]} /></td><td className="n"><b>{kwh(plan.solarKWh)}</b></td></tr>
+                  {shading.buildings.length > 0 && (
+                    <tr><td><L t={T.shadeLoss} /></td><td className="n" style={{ color: shading.lossPct >= 3 ? B.amber : B.green, fontWeight: 700 }}>{shading.lossPct < 0.5 ? '0%' : `−${Math.round(shading.lossPct)}%`}</td></tr>
+                  )}
                   <tr><td><L t={T.billBefore} /></td><td className="n">{pkr(plan.billBefore)}</td></tr>
                   <tr><td><L t={T.billAfter} /></td><td className="n" style={{ color: B.green, fontWeight: 700 }}>{pkr(plan.billAfter)}</td></tr>
                 </tbody>

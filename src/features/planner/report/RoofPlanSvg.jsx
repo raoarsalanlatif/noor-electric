@@ -2,6 +2,7 @@
 // Top-down roof plan for the report: roof outline, parapet, rooftop items, kept-clear zones,
 // every installed panel, and dimension lines (roof width/depth, panel array size, setbacks).
 // Text inside the SVG is English/numbers only; bilingual labels are in the HTML around it.
+import { facingLabel } from '../shading';
 
 const C = {
   roof: '#eef1f5', parapet: '#9aa4b2', panel: '#1e3a8a', panelLine: '#60a5fa',
@@ -34,6 +35,7 @@ function Dim({ x1, y1, x2, y2, label, vertical, offset = 0 }) {
 }
 
 export default function RoofPlanSvg({ plan, roof, width = 700, height = 560 }) {
+  const facing = plan.shading?.facing ?? 180;
   const { layout, panel, installed } = plan;
   const W = roof.width; const L = roof.length;
   const pad = { l: 64, r: 30, t: 54, b: 60 };
@@ -110,11 +112,12 @@ export default function RoofPlanSvg({ plan, roof, width = 700, height = 560 }) {
 
       {/* compass + front marker */}
       <g transform={`translate(${width - 30}, ${pad.t + 6})`} fontFamily="Inter, Arial, sans-serif">
-        <polygon points="0,-14 7,6 0,1 -7,6" fill={C.dim} />
-        <text x="0" y="22" fontSize="12" fontWeight="700" textAnchor="middle" fill={C.dim}>N</text>
+        {/* north arrow: turns with the direction the house faces */}
+        <polygon points="0,-14 7,6 0,1 -7,6" fill={C.dim} transform={`rotate(${180 - facing})`} />
+        <text x="0" y="26" fontSize="12" fontWeight="700" textAnchor="middle" fill={C.dim}>N</text>
       </g>
       <text x={X(0)} y={Y(L / 2) + 50} fontSize="11" fill={C.accent} fontWeight="700" textAnchor="middle" fontFamily="Inter, Arial, sans-serif">
-        FRONT · SOUTH (SUN SIDE) ▼
+        {facing === 180 ? 'FRONT · SOUTH (SUN SIDE) ▼' : `FRONT · FACES ${facingLabel(facing).toUpperCase()} ▼`}
       </text>
       <text x={8} y={16} fontSize="10" fill="#64748b" fontFamily="Inter, Arial, sans-serif">
         {`${panel.watts} W panels ${panel.width.toFixed(2)} × ${panel.length.toFixed(2)} m · row pitch ${layout.pitch.toFixed(1)} m · structure: ${plan.structure.label}`}
