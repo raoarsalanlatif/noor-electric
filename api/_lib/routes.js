@@ -433,6 +433,7 @@ function quoteFields(b) {
       estimatedCost: num(plan.estimatedCost, { min: 0 }),
       structure: str(plan.structure, 40),
       roofItems: str(plan.roofItems, 400),
+      surroundings: str(plan.surroundings, 400),
     } : null,
   };
 }
