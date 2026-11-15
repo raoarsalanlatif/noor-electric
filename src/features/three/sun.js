@@ -9,12 +9,15 @@ export const SEASONS = {
   winter: { label: 'Winter', declination: -23.44, sunFactor: 0.78 },
 };
 
+/** A season is one of the keys above, or a custom { declination, sunFactor } (used for month-by-month figures). */
+export const seasonOf = (key) => (key && typeof key === 'object' ? key : SEASONS[key] || SEASONS.annual);
+
 /**
  * Sun altitude/azimuth (degrees) and a unit direction vector in scene space.
  * Scene axes: +x = east, +y = up, +z = south (the street side of the house).
  */
 export function sunPosition(lat, seasonKey, hour) {
-  const dec = (SEASONS[seasonKey] || SEASONS.annual).declination * RAD;
+  const dec = seasonOf(seasonKey).declination * RAD;
   const phi = lat * RAD;
   const H = (hour - 12) * 15 * RAD;
   const sinAlt = Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.cos(H);
