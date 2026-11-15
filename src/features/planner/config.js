@@ -25,6 +25,8 @@ export const PLANNER_CONFIG = {
   shadeNorth: 1.3,
   shadeSide: 0.35,
   accessGap: 0.3, // walkway kept around objects for maintenance
+  // Share of a panel's output that is lost while it is in a building's shadow (the rest is diffuse sky light).
+  shadeBeamShare: 0.85,
 };
 
 /**
@@ -99,9 +101,21 @@ export function nearestCity(lat, lng) {
   return { city: best, km: bestD };
 }
 
+/** Compass direction the front of the house faces (degrees from north). Panels lean towards the front. */
+export const FACINGS = [
+  { deg: 180, label: 'South', short: 'S' }, { deg: 135, label: 'South-east', short: 'SE' }, { deg: 225, label: 'South-west', short: 'SW' },
+  { deg: 90, label: 'East', short: 'E' }, { deg: 270, label: 'West', short: 'W' },
+  { deg: 45, label: 'North-east', short: 'NE' }, { deg: 315, label: 'North-west', short: 'NW' }, { deg: 0, label: 'North', short: 'N' },
+];
+
+/** A building next to the house, placed in the 3D editor. Sizes in metres; h is its height above the ground. */
+export const SURROUNDING = { label: 'Nearby building', short: 'Building', w: 9, d: 10, h: 9.5 };
+
 export const DEFAULT_SITE = {
   storeys: 2,
   parapetH: 0.9, // metres
   structure: 'auto', // 'auto' picks the cheapest structure that fits; or 'L2' | 'L3' | 'elevated'
   items: defaultRoofItems({ width: 10, length: 14 }),
+  facing: 180, // the front of the house faces south
+  surroundings: [], // nearby buildings that may shade the roof
 };

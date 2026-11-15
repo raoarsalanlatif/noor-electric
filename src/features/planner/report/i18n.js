@@ -60,6 +60,9 @@ export const T = {
   structureCost: ['Structure cost', 'اسٹرکچر کی لاگت'],
   overflow: ['panels do not fit on this roof', 'پینلز اس چھت پر نہیں آ سکتے'],
 
+  faces: ['Front of house faces', 'گھر کا رخ'],
+  shadeLoss: ['Shade from nearby buildings', 'قریبی عمارتوں کے سائے سے نقصان'],
+  frontPlain: ['Front of the house', 'گھر کا سامنے والا حصہ'],
   legendPanel: ['Solar panel', 'سولر پینل'],
   legendItem: ['Tank / room / AC', 'ٹینکی / کمرہ / اے سی'],
   legendShade: ['Kept clear (walkway & shadow)', 'خالی جگہ (راستہ اور سایہ)'],
@@ -92,6 +95,10 @@ export const T = {
     'مفت سائٹ سروے کے لیے واٹس ایپ کریں یا کال کریں۔',
   ],
   contact: ['Contact', 'رابطہ'],
+};
+
+export const FACING_UR = {
+  180: 'جنوب', 135: 'جنوب مشرق', 225: 'جنوب مغرب', 90: 'مشرق', 270: 'مغرب', 45: 'شمال مشرق', 315: 'شمال مغرب', 0: 'شمال',
 };
 
 export const SEASON_UR = { annual: 'سالانہ اوسط', summer: 'گرمی', winter: 'سردی' };

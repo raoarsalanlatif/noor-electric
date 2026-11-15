@@ -6,6 +6,7 @@ import { faCalendarCheck, faCircleCheck } from '@fortawesome/free-solid-svg-icon
 import { Card, CardTitle, TextInput, Button, Label, t } from './ui';
 import { PLANNER_CONFIG, ROOF_ITEMS } from './config';
 import { post } from '../../lib/api';
+import { facingLabel } from './shading';
 
 const Form = styled.form`
   display: grid;
@@ -37,6 +38,13 @@ function describeRoofItems(obstacles = []) {
   return Object.entries(counts).map(([k, n]) => `${n} × ${k}`).join(', ');
 }
 
+/** House direction, nearby buildings and the shade they cause, in one line. */
+function describeShading(plan) {
+  const { shading } = plan;
+  const b = shading.buildings.map((x) => `${x.w.toFixed(0)}×${x.d.toFixed(0)}×${x.h.toFixed(0)} m`).join(', ');
+  return `front faces ${facingLabel(shading.facing).toLowerCase()}; ${shading.buildings.length ? `${shading.buildings.length} nearby building(s) (${b}), shade loss ${Math.round(shading.lossPct)}%` : 'no nearby buildings entered'}`;
+}
+
 function summary(plan, form) {
   const lines = [
     'Site visit request — Noor Electric Solar Planner',
@@ -50,6 +58,7 @@ function summary(plan, form) {
     `Roof: ${Math.round(plan.layout.roofArea)} m², ${plan.site.storeys} storey(s), parapet ${plan.site.parapetH ? `${Math.round(plan.site.parapetH / 0.3048)} ft` : 'none'}`,
     `On the roof: ${describeRoofItems(plan.layout.obstacles)}`,
     `Structure: ${plan.structure.label}${plan.structureAuto ? ' (auto)' : ''} — fits ${plan.layout.maxPanels} panels`,
+    `Surroundings: ${describeShading(plan)}`,
     `Design: ${plan.chosen.panels} × ${plan.panel.watts} W, ${plan.chosen.inverterKW} kW inverter, ${plan.chosen.batteryKWh} kWh battery`,
     `Status: ${plan.status.toUpperCase()}${plan.issues.length ? ` — ${plan.issues.map((i) => i.title).join(', ')}` : ''}`,
   ];
@@ -91,6 +100,7 @@ export default function BookingCard({ plan }) {
         estimatedCost: Math.round(plan.cost),
         structure: plan.structure.label,
         roofItems: describeRoofItems(plan.layout.obstacles),
+        surroundings: describeShading(plan),
       },
     }).catch(() => {});
     setSent(true);

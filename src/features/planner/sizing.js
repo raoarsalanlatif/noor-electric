@@ -1,6 +1,7 @@
 import { APPLIANCE_MAP, PROFILES } from './appliances';
 import { PLANNER_CONFIG as CFG, PANEL_OPTIONS, INVERTER_SIZES, CITIES, DEFAULT_SITE, STRUCTURES, STRUCTURE_ORDER } from './config';
 import { dailyShape, SEASONS } from '../three/sun';
+import { computeShading, facingLabel } from './shading';
 
 const TILT = (15 * Math.PI) / 180;
 const DIVERSITY = 0.8; // not every appliance switches on at the same instant
@@ -227,7 +228,9 @@ export function computePlan(input) {
   const installed = Math.min(chosen.panels, layout.maxPanels);
   const overflow = Math.max(0, chosen.panels - layout.maxPanels);
   const systemKW = (installed * panel.watts) / 1000;
-  const solarKw = shape.map((s) => s * systemKW);
+  // surrounding buildings and the direction the house faces (no effect on a south-facing house with open sky)
+  const shading = computeShading({ roof, site, layout, panel, installed, lat: city.lat, season });
+  const solarKw = shading.active ? shape.map((s, k) => s * systemKW * shading.factor[k]) : shape.map((s) => s * systemKW);
 
   const simArgs = { loadKw, running, solarKw, inverterKW: chosen.inverterKW, batteryKWh: chosen.batteryKWh };
   // money is always calculated with the grid available; the off-grid run only drives the outage view
@@ -281,6 +284,21 @@ export function computePlan(input) {
       detail: `Solar covers ${Math.round(coverage * 100)}% of your daily use. The rest comes from the grid.`,
     });
   }
+  if (shading.lossPct >= 3) {
+    const wh = shading.worstHour;
+    issues.push({
+      type: 'shade', severity: 'warn',
+      title: 'Shade from nearby buildings',
+      detail: `Nearby buildings shade the panels and cost about ${Math.round(shading.lossPct)}% of the day's solar energy${wh === null ? '' : `, mostly around ${((wh + 11) % 12) + 1} ${wh < 12 ? 'am' : 'pm'}`}.`,
+    });
+  }
+  if (shading.orientPct <= -5) {
+    issues.push({
+      type: 'facing', severity: 'warn',
+      title: `Roof faces ${facingLabel(shading.facing).toLowerCase()}`,
+      detail: `Panels that lean ${facingLabel(shading.facing).toLowerCase()} instead of south make about ${Math.round(-shading.orientPct)}% less energy.`,
+    });
+  }
   const status = issues.some((i) => i.severity === 'fail') ? 'fail' : issues.length ? 'warn' : 'ok';
 
   // ---- fixes ----
@@ -330,7 +348,7 @@ export function computePlan(input) {
       key, label: st.label, short: st.short, desc: st.desc, maxPanels, fits,
       cost: Math.min(maxPanels, panelsWanted) * (panel.watts / 1000) * st.costPerKW,
     })),
-    loadKw, running, solarKw, sim,
+    loadKw, running, solarKw, sim, shading,
     dailyKWh, peakW, requiredKW, panelsNeeded, areaNeeded,
     recommended: { inverterKW: recInverter, batteryKWh: recBattery, panels: panelsNeeded },
     chosen, installed, overflow, systemKW,

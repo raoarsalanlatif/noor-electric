@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Sky, Stars } from '@react-three/drei';
 import * as THREE from 'three';
-import { sunPosition, daylightFromAlt } from './sun';
+import { sunPosition, sunFor, daylightFromAlt } from './sun';
 import BrandSign from './BrandSign';
 import { grassTexture, roadTexture, plasterTexture, brickTexture } from './textures';
 
@@ -12,7 +12,7 @@ const FOG_DUSK = new THREE.Color('#e9b38a');
 const FOG_NIGHT = new THREE.Color('#0a1022');
 
 /** Physical sky, sun/moon lights and stars driven by a shared clock ref ({ hour }). */
-export function SkySystem({ clock, lat, season, shadowSize = 30 }) {
+export function SkySystem({ clock, lat, season, shadowSize = 30, facing = 180 }) {
   const sky = useRef();
   const sun = useRef();
   const moon = useRef();
@@ -30,7 +30,7 @@ export function SkySystem({ clock, lat, season, shadowSize = 30 }) {
   }, [scene, target]);
 
   useFrame(() => {
-    const { alt, dir } = sunPosition(lat, season, clock.current.hour);
+    const { alt, dir } = sunFor(lat, season, clock.current.hour, facing);
     const d = daylightFromAlt(alt);
     const [x, y, z] = dir;
     if (sky.current) sky.current.material.uniforms.sunPosition.value.set(x * 1000, y * 1000, z * 1000);
@@ -145,7 +145,7 @@ function NeighbourHouse({ position, size, windowsRef, idx }) {
 }
 
 /** Ground, road, boundary wall, trees, street lamps and neighbouring houses. */
-export function Neighbourhood({ roof, clock, lat, season, compact = false }) {
+export function Neighbourhood({ roof, clock, lat, season, compact = false, houses = true }) {
   const W = roof.width; const L = roof.length;
   const windows = useRef([]);
   const grass = useMemo(() => grassTexture([50, 50]), []);
@@ -199,7 +199,7 @@ export function Neighbourhood({ roof, clock, lat, season, compact = false }) {
       <StreetLamp position={[-plotW / 2 - 1, 0, L / 2 + 3.4]} clock={clock} lat={lat} season={season} />
       <StreetLamp position={[plotW / 2 + 6, 0, L / 2 + 3.4]} clock={clock} lat={lat} season={season} />
 
-      {!compact && (
+      {!compact && houses && (
         <>
           <NeighbourHouse idx={0} windowsRef={windows} position={[-plotW / 2 - 9, 0, -4]} size={[10, 6.4, 11]} />
           <NeighbourHouse idx={1} windowsRef={windows} position={[plotW / 2 + 17, 0, -8]} size={[9, 6.4, 10]} />
