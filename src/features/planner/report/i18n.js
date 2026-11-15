@@ -1,4 +1,4 @@
-// English + Urdu labels for the downloadable design report.
+// English + Urdu labels for the downloadable design report (the report shows one language or both).
 // Each entry is [English, Urdu]. Numbers are kept in Western digits so they read the same in both.
 
 export const T = {
@@ -30,6 +30,10 @@ export const T = {
   perMonth: ['per month', 'ماہانہ'],
   billBefore: ['Bill today', 'موجودہ بل'],
   billAfter: ['Bill with solar', 'سولر کے بعد بل'],
+  hybrid: ['Hybrid', 'ہائبرڈ'],
+  onGrid: ['On-grid', 'آن گرڈ'],
+  unitsMonth: ['units / month', 'یونٹس ماہانہ'],
+  fit: ['fit', 'فٹ'],
   view3d: ['3D view of your design', 'آپ کے ڈیزائن کا تھری ڈی منظر'],
 
   status: {

@@ -24,6 +24,17 @@ const Actions = styled.div`
 `;
 
 const Ur = styled.span`font-family: 'Noto Nastaliq Urdu', 'Noto Naskh Arabic', serif; direction: rtl; font-weight: 400; margin-left: 8px; font-size: 0.85em;`;
+const LangPick = styled.div`
+  display: inline-flex; border: 1px solid ${t.line}; border-radius: 11px; overflow: hidden; height: 42px;
+  button { border: 0; background: transparent; color: ${t.muted}; padding: 0 14px; font-weight: 700; font-size: 0.86rem; cursor: pointer; }
+  button + button { border-left: 1px solid ${t.line}; }
+  button.on { background: ${t.orange}; color: #111; }
+  button.ur { font-family: 'Noto Nastaliq Urdu', 'Noto Naskh Arabic', serif; font-weight: 400; }
+`;
+
+// Report language. English unless the customer asks for Urdu or both.
+const LANGS = [['en', 'English'], ['ur', 'اردو'], ['both', 'Both']];
+
 const Msg = styled.p`margin: 10px 0 0; font-size: 0.82rem; color: ${(p) => (p.$err ? '#fca5a5' : t.muted)};`;
 
 // The report is laid out off-screen at A4 size and captured from there.
@@ -33,6 +44,7 @@ const pad = (n) => String(n).padStart(2, '0');
 
 export default function ExportCard({ plan, roof, load, takeShot, disabled }) {
   const [customer, setCustomer] = useState({ name: '', area: '' });
+  const [lang, setLang] = useState('en');
   const [job, setJob] = useState(null); // { kind, shot, designNo, date }
   const [msg, setMsg] = useState({ text: '', err: false });
   const reportRef = useRef(null);
@@ -40,7 +52,7 @@ export default function ExportCard({ plan, roof, load, takeShot, disabled }) {
   useEffect(() => { ensureUrduFont(); }, []);
 
   const start = async (kind) => {
-    setMsg({ text: 'Preparing your design… / ڈیزائن تیار ہو رہا ہے', err: false });
+    setMsg({ text: 'Preparing your design…', err: false });
     const now = new Date();
     const designNo = `NE-${String(now.getFullYear()).slice(2)}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
     let shot = null;
@@ -49,8 +61,8 @@ export default function ExportCard({ plan, roof, load, takeShot, disabled }) {
       if (shot) { saveDataUrl(shot, `Noor-Electric-3D-${designNo}.jpg`); setMsg({ text: '3D picture downloaded.', err: false }); } else setMsg({ text: 'Could not capture the 3D view — please try again.', err: true });
       return;
     }
-    await ensureUrduFont();
-    setJob({ kind, shot, designNo, date: now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) });
+    if (lang !== 'en') await ensureUrduFont();
+    setJob({ kind, shot, lang, designNo, date: now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) });
   };
 
   useEffect(() => {
@@ -65,10 +77,10 @@ export default function ExportCard({ plan, roof, load, takeShot, disabled }) {
         const base = `Noor-Electric-Solar-Design-${job.designNo}`;
         if (job.kind === 'pdf') {
           saveBlob(await makePdfBlob(canvases), `${base}.pdf`);
-          setMsg({ text: 'PDF downloaded. / پی ڈی ایف ڈاؤن لوڈ ہو گئی', err: false });
+          setMsg({ text: 'PDF downloaded.', err: false });
         } else if (job.kind === 'image') {
           saveBlob(await makeImageBlob(canvases), `${base}.png`);
-          setMsg({ text: 'Image downloaded. / تصویر ڈاؤن لوڈ ہو گئی', err: false });
+          setMsg({ text: 'Image downloaded.', err: false });
         } else if (job.kind === 'share') {
           const pdf = new File([await makePdfBlob(canvases)], `${base}.pdf`, { type: 'application/pdf' });
           const shared = await shareFiles([pdf], 'My solar system design from Noor Electric');
@@ -89,11 +101,19 @@ export default function ExportCard({ plan, roof, load, takeShot, disabled }) {
     <Card>
       <CardTitle><FontAwesomeIcon icon={faFileArrowDown} /> &nbsp;Download your design <Ur>اپنا ڈیزائن ڈاؤن لوڈ کریں</Ur></CardTitle>
       <p style={{ margin: '0 0 12px', color: t.muted, fontSize: '0.88rem' }}>
-        A 3-page report in English and Urdu with the 3D view, roof plan with dimensions, panels required, structure, your load and costs.
+        A 3-page report with the 3D view, roof plan with dimensions, panels required, structure, your load and costs. The report is in English — pick Urdu or both if you prefer.
       </p>
       <Grid>
         <div><Label htmlFor="ex-name">Your name (optional)</Label><TextInput id="ex-name" value={customer.name} onChange={(e) => setCustomer({ ...customer, name: e.target.value })} placeholder="e.g. Ahmed Khan" /></div>
         <div><Label htmlFor="ex-area">Area (optional)</Label><TextInput id="ex-area" value={customer.area} onChange={(e) => setCustomer({ ...customer, area: e.target.value })} placeholder="e.g. Hayatabad Phase 5" /></div>
+        <div>
+          <Label as="span" id="ex-lang">Report language</Label>
+          <LangPick role="group" aria-labelledby="ex-lang">
+            {LANGS.map(([key, label]) => (
+              <button key={key} type="button" className={`${lang === key ? 'on' : ''} ${key === 'ur' ? 'ur' : ''}`} aria-pressed={lang === key} disabled={busy} onClick={() => setLang(key)}>{label}</button>
+            ))}
+          </LangPick>
+        </div>
       </Grid>
       <Actions>
         <button type="button" className="primary" disabled={busy || disabled} onClick={() => start('pdf')}><FontAwesomeIcon icon={faFilePdf} /> PDF</button>
@@ -105,7 +125,7 @@ export default function ExportCard({ plan, roof, load, takeShot, disabled }) {
       {msg.text && <Msg $err={msg.err}>{msg.text}</Msg>}
       {job && createPortal(
         <Offscreen aria-hidden="true">
-          <DesignReport ref={reportRef} plan={plan} roof={roof} load={load} customer={customer} shot={job.shot} designNo={job.designNo} date={job.date} logo={img('logo.png')} />
+          <DesignReport ref={reportRef} plan={plan} roof={roof} load={load} customer={customer} shot={job.shot} designNo={job.designNo} date={job.date} lang={job.lang} logo={img('logo.png')} />
         </Offscreen>,
         document.body,
       )}

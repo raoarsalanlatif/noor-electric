@@ -1,7 +1,7 @@
 /* eslint-disable react/prop-types */
 // The downloadable design report: three A4 pages rendered off-screen, then captured to PDF / images.
-// Every label is shown in English and Urdu.
-import { forwardRef } from 'react';
+// `lang` picks the language: 'en' (default), 'ur' (Urdu, laid out right-to-left) or 'both'.
+import { createContext, forwardRef, useContext } from 'react';
 import styled from 'styled-components';
 import { company, ceo } from '../../../content/company';
 import { APPLIANCE_MAP } from '../appliances';
@@ -21,6 +21,12 @@ const Page = styled.div`
   background: #fff; color: ${B.ink}; font-family: Inter, Arial, sans-serif; font-size: 12px; line-height: 1.4;
   display: flex; flex-direction: column;
   .ur { font-family: ${URDU_FONT}; direction: rtl; line-height: 1.9; }
+  /* Urdu-only report: the whole page reads right-to-left; numbers and units stay left-to-right */
+  &[data-lang='ur'] { direction: rtl; }
+  &[data-lang='ur'] .ltr, &[data-lang='ur'] footer > span, &[data-lang='ur'] .meta-v { direction: ltr; unicode-bidi: isolate; display: inline-block; text-align: right; }
+  &[data-lang='ur'] .v, &[data-lang='ur'] .co, &[data-lang='ur'] .addr { direction: ltr; text-align: right; }
+  &[data-lang='ur'] td.n, &[data-lang='ur'] .ph { direction: ltr; text-align: left; }
+  &[data-lang='ur'] svg { direction: ltr; }
 `;
 
 const Head = styled.header`
@@ -29,7 +35,7 @@ const Head = styled.header`
   img { width: 54px; height: 54px; background: #fff; border-radius: 50%; padding: 4px; }
   .co b { display: block; font-family: Poppins, Inter, sans-serif; font-size: 18px; letter-spacing: 0.2px; }
   .co span { color: #cbd5e1; font-size: 11px; }
-  .ttl { margin-left: auto; text-align: right; }
+  .ttl { margin-inline-start: auto; text-align: end; }
   .ttl b { display: block; font-family: Poppins, Inter, sans-serif; font-size: 17px; color: ${B.gold}; }
   .ttl .ur { font-size: 15px; color: #fff; line-height: 1.7; }
 `;
@@ -83,12 +89,17 @@ const Shot = styled.figure`
 
 const Table = styled.table`
   width: 100%; border-collapse: collapse; font-size: 11px;
-  th { text-align: left; background: ${B.soft}; color: ${B.navy}; font-weight: 700; padding: 5px 8px; border-bottom: 1px solid ${B.line}; vertical-align: bottom; }
+  th { text-align: start; background: ${B.soft}; color: ${B.navy}; font-weight: 700; padding: 5px 8px; border-bottom: 1px solid ${B.line}; vertical-align: bottom; }
   th .ur { display: block; font-weight: 400; font-size: 9.5px; line-height: 1.4; }
   th.n .ur { text-align: right; }
   td { padding: 2px 8px; border-bottom: 1px solid ${B.line}; vertical-align: middle; }
   td .ur { display: block; font-size: 9.5px; color: ${B.muted}; line-height: 1.4; text-align: left; }
-  td.n, th.n { text-align: right; }
+  td.n, th.n { text-align: end; }
+  td.n .ur { text-align: right; }
+  tr.tot td .ur { display: inline; }
+  td .ur.solo, th .ur.solo { font-size: 11.5px; color: inherit; font-weight: inherit; line-height: 1.7; text-align: start; }
+  td.n .ur.solo, th.n .ur.solo { text-align: end; }
+  td .ur.solo.inl { display: inline; }
   tr.tot td { font-weight: 700; background: ${B.soft}; }
   tr.sel td { background: #fff7ed; }
 `;
@@ -104,29 +115,55 @@ const Legend = styled.div`
 
 const Notes = styled.div`
   background: ${B.soft}; border-radius: 10px; padding: 8px 14px; display: grid; gap: 2px;
-  p { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: center; font-size: 11px; }
-  .ur { font-size: 11px; text-align: right; line-height: 1.6; }
+  p { margin: 0; display: grid; grid-template-columns: ${(p) => (p.$one ? '1fr' : '1fr 1fr')}; gap: 14px; align-items: center; font-size: 11px; }
+  .ur { font-size: 11px; text-align: ${(p) => (p.$one ? 'start' : 'right')}; line-height: 1.6; }
 `;
 
 const Contact = styled.div`
   background: ${B.navy}; color: #fff; border-radius: 12px; padding: 12px 16px; display: flex; align-items: center; gap: 14px;
   img { width: 44px; height: 44px; background: #fff; border-radius: 50%; padding: 3px; }
   b { font-family: Poppins, Inter, sans-serif; font-size: 15px; }
-  .ph { margin-left: auto; text-align: right; font-size: 12px; }
+  .ph { margin-inline-start: auto; text-align: end; font-size: 12px; }
   .ph b { color: ${B.gold}; font-size: 16px; display: block; }
   .ur { font-size: 12px; }
 `;
 
-/** English label with its Urdu translation underneath (or beside, when inline). */
-function Bi({ t, inline, gap = 8 }) {
-  if (inline) return <span style={{ display: 'inline-flex', gap, alignItems: 'baseline' }}><span>{t[0]}</span><span className="ur">{t[1]}</span></span>;
-  return <><div className="en">{t[0]}</div><div className="ur">{t[1]}</div></>;
+const LangCtx = createContext('en');
+const useLang = () => useContext(LangCtx);
+
+/** A label in the report language. With both languages: English, then `sep`, then Urdu. */
+function L({ t, sep = '' }) {
+  const lang = useLang();
+  if (lang === 'en') return t[0];
+  if (lang === 'ur') return <span className="ur solo">{t[1]}</span>;
+  return <>{t[0]}{sep}<span className="ur">{t[1]}</span></>;
 }
+
+/** A label where only one language fits: Urdu in the Urdu report, English otherwise. */
+function P({ t, inline }) {
+  return useLang() === 'ur' ? <span className={`ur solo${inline ? ' inl' : ''}`}>{t[1]}</span> : t[0];
+}
+
+/** Label stacked above a value (English line, Urdu line). */
+function Bi({ t }) {
+  const lang = useLang();
+  return <>{lang !== 'ur' && <div className="en">{t[0]}</div>}{lang !== 'en' && <div className="ur">{t[1]}</div>}</>;
+}
+
+/** Section heading. */
+function Hd({ t, style }) {
+  const lang = useLang();
+  return <H2 style={style}>{lang !== 'ur' && <b>{t[0]}</b>}{lang !== 'en' && <span className="ur">{t[1]}</span>}</H2>;
+}
+
+/** Numbers and units: kept left-to-right inside the right-to-left Urdu report. */
+const N = ({ children }) => <span className="ltr">{children}</span>;
 
 const pkr = (n) => `Rs ${Math.round(n || 0).toLocaleString('en-PK')}`;
 const kwh = (n) => `${(n || 0).toFixed(1)} kWh`;
 
 function Header({ logo }) {
+  const lang = useLang();
   return (
     <Head>
       <img src={logo} alt="" />
@@ -135,8 +172,8 @@ function Header({ logo }) {
         <span>{company.legalName} · {company.website}</span>
       </div>
       <div className="ttl">
-        <b>{T.title[0]}</b>
-        <div className="ur">{T.title[1]}</div>
+        {lang !== 'ur' && <b>{T.title[0]}</b>}
+        {lang !== 'en' && <div className="ur">{T.title[1]}</div>}
       </div>
     </Head>
   );
@@ -146,12 +183,12 @@ function Footer({ n, total, designNo }) {
   return (
     <Foot>
       <span><b>{company.phones[0].display}</b> · {company.phones[1].display} · {company.website}</span>
-      <span>{designNo} · {T.page[0]} {n}/{total}</span>
+      <span>{designNo} · <P t={T.page} /> {n}/{total}</span>
     </Foot>
   );
 }
 
-const DesignReport = forwardRef(function DesignReport({ plan, roof, load, customer, shot, designNo, date, logo }, ref) {
+const DesignReport = forwardRef(function DesignReport({ plan, roof, load, customer, shot, designNo, date, logo, lang = 'en' }, ref) {
   const S = plan.structure;
   const panelsWanted = plan.chosen.panels;
   const ph = plan.site.parapetH || 0;
@@ -175,88 +212,89 @@ const DesignReport = forwardRef(function DesignReport({ plan, roof, load, custom
   ];
 
   return (
+    <LangCtx.Provider value={lang}>
     <div ref={ref}>
       {/* ------------------------------ page 1 ------------------------------ */}
-      <Page className="report-page">
+      <Page className="report-page" data-lang={lang}>
         <Header logo={logo} />
         <Body>
-          <Meta>{meta.map(([t, v]) => <div key={t[0]}><small>{t[0]} · <span className="ur">{t[1]}</span></small><b>{v}</b></div>)}</Meta>
-          <Status $s={plan.status}><span>{T.status[plan.status][0]}</span><span className="ur">{T.status[plan.status][1]}</span></Status>
-          <H2><b>{T.summary[0]}</b><span className="ur">{T.summary[1]}</span></H2>
+          <Meta>{meta.map(([t, v]) => <div key={t[0]}><small><L t={t} sep=" · " /></small><b className="meta-v">{v}</b></div>)}</Meta>
+          <Status $s={plan.status}>{lang !== 'ur' && <span>{T.status[plan.status][0]}</span>}{lang !== 'en' && <span className="ur">{T.status[plan.status][1]}</span>}</Status>
+          <Hd t={T.summary} />
           <Kpis>
-            <div className="hi"><Bi t={T.systemSize} /><div className="v">{plan.systemKW.toFixed(2)} kW</div><div className="s">{plan.chosen.batteryKWh ? 'Hybrid · ہائبرڈ' : 'On-grid · آن گرڈ'}</div></div>
-            <div className="hi"><Bi t={T.panelsRequired} /><div className="v">{panelsWanted} × {plan.panel.watts} W</div><div className="s">{plan.overflow > 0 ? `${plan.installed} fit · ${plan.overflow} ${T.overflow[0]}` : `${T.panelsInstalled[0]}: ${plan.installed}`}</div></div>
+            <div className="hi"><Bi t={T.systemSize} /><div className="v">{plan.systemKW.toFixed(2)} kW</div><div className="s"><L t={plan.chosen.batteryKWh ? T.hybrid : T.onGrid} sep=" · " /></div></div>
+            <div className="hi"><Bi t={T.panelsRequired} /><div className="v">{panelsWanted} × {plan.panel.watts} W</div><div className="s">{plan.overflow > 0 ? <>{plan.installed} <P t={T.fit} /> · {plan.overflow} <P t={T.overflow} /></> : <><P t={T.panelsInstalled} />: {plan.installed}</>}</div></div>
             <div><Bi t={T.inverter} /><div className="v">{plan.chosen.inverterKW} kW</div></div>
-            <div><Bi t={T.battery} /><div className="v">{plan.chosen.batteryKWh ? `${plan.chosen.batteryKWh} kWh` : '—'}</div><div className="s">{plan.chosen.batteryKWh ? '' : `${T.noBattery[0]} · ${T.noBattery[1]}`}</div></div>
-            <div><Bi t={T.dailyUse} /><div className="v">{kwh(plan.dailyKWh)}</div><div className="s">{Math.round(plan.dailyKWh * 30)} units / month · یونٹس ماہانہ</div></div>
+            <div><Bi t={T.battery} /><div className="v">{plan.chosen.batteryKWh ? `${plan.chosen.batteryKWh} kWh` : '—'}</div><div className="s">{plan.chosen.batteryKWh ? '' : <L t={T.noBattery} sep=" · " />}</div></div>
+            <div><Bi t={T.dailyUse} /><div className="v">{kwh(plan.dailyKWh)}</div><div className="s"><N>{Math.round(plan.dailyKWh * 30)}</N> <L t={T.unitsMonth} sep=" · " /></div></div>
             <div><Bi t={T.peakLoad} /><div className="v">{(plan.peakW / 1000).toFixed(1)} kW</div></div>
-            <div><Bi t={T.structure} /><div className="v" style={{ fontSize: 14 }}>{S.label}</div><div className="s ur">{STRUCTURE_UR[S.key]}</div></div>
-            <div><Bi t={T.roofSize} /><div className="v">{roof.width} × {roof.length} m</div><div className="s">{Math.round(roof.width * roof.length)} m²</div></div>
+            <div><Bi t={T.structure} /><div className="v" style={{ fontSize: 14 }}>{lang === 'ur' ? <span className="ur">{STRUCTURE_UR[S.key]}</span> : S.label}</div>{lang === 'both' && <div className="s ur">{STRUCTURE_UR[S.key]}</div>}</div>
+            <div><Bi t={T.roofSize} /><div className="v">{roof.width} × {roof.length} m</div><div className="s"><N>{Math.round(roof.width * roof.length)} m²</N></div></div>
             <div><Bi t={T.monthlySaving} /><div className="v">{pkr(plan.monthlySaving)}</div></div>
-            <div><Bi t={T.estCost} /><div className="v">{pkr(plan.cost)}</div><div className="s">{T.structureCost[0]}: {pkr(plan.structureCost)}</div></div>
-            <div><Bi t={T.payback} /><div className="v">{plan.paybackYears ? `${plan.paybackYears.toFixed(1)}` : '—'}</div><div className="s">{T.years[0]} · {T.years[1]}</div></div>
+            <div><Bi t={T.estCost} /><div className="v">{pkr(plan.cost)}</div><div className="s"><P t={T.structureCost} />: <N>{pkr(plan.structureCost)}</N></div></div>
+            <div><Bi t={T.payback} /><div className="v">{plan.paybackYears ? `${plan.paybackYears.toFixed(1)}` : '—'}</div><div className="s"><L t={T.years} sep=" · " /></div></div>
             <div><Bi t={T.coverage} /><div className="v">{Math.round(plan.coverage * 100)}%</div></div>
           </Kpis>
           <Shot>
             {shot ? <img src={shot} alt="" /> : null}
-            <figcaption><span>{T.view3d[0]}</span><span className="ur">{T.view3d[1]}</span></figcaption>
+            <figcaption>{lang !== 'ur' && <span>{T.view3d[0]}</span>}{lang !== 'en' && <span className="ur">{T.view3d[1]}</span>}</figcaption>
           </Shot>
         </Body>
         <Footer n={1} total={3} designNo={designNo} />
       </Page>
 
       {/* ------------------------------ page 2 ------------------------------ */}
-      <Page className="report-page">
+      <Page className="report-page" data-lang={lang}>
         <Header logo={logo} />
         <Body>
-          <H2><b>{T.roofPlan[0]}</b><span className="ur">{T.roofPlan[1]}</span></H2>
+          <Hd t={T.roofPlan} />
           <div style={{ border: `1px solid ${B.line}`, borderRadius: 12, overflow: 'hidden' }}>
             <RoofPlanSvg plan={plan} roof={roof} width={736} height={430} />
           </div>
           <Legend>
-            <span><i style={{ background: '#1e3a8a' }} />{T.legendPanel[0]} <span className="ur">{T.legendPanel[1]}</span></span>
-            <span><i style={{ background: '#4b5563' }} />{T.legendItem[0]} <span className="ur">{T.legendItem[1]}</span></span>
-            <span><i style={{ background: '#fed7aa' }} />{T.legendShade[0]} <span className="ur">{T.legendShade[1]}</span></span>
-            <span><i style={{ background: '#f47b20' }} />{T.front[0]} <span className="ur">{T.front[1]}</span></span>
+            <span><i style={{ background: '#1e3a8a' }} /><L t={T.legendPanel} sep=" " /></span>
+            <span><i style={{ background: '#4b5563' }} /><L t={T.legendItem} sep=" " /></span>
+            <span><i style={{ background: '#fed7aa' }} /><L t={T.legendShade} sep=" " /></span>
+            <span><i style={{ background: '#f47b20' }} /><L t={T.front} sep=" " /></span>
           </Legend>
           <Two>
             <div>
-              <H2 style={{ marginBottom: 6 }}><b>{T.roofDetails[0]}</b><span className="ur">{T.roofDetails[1]}</span></H2>
+              <Hd t={T.roofDetails} style={{ marginBottom: 6 }} />
               <Table>
                 <tbody>
-                  <tr><td>{T.roofSize[0]}<span className="ur">{T.roofSize[1]}</span></td><td className="n"><b>{roof.width} m × {roof.length} m</b></td></tr>
-                  <tr><td>{T.roofArea[0]}<span className="ur">{T.roofArea[1]}</span></td><td className="n">{Math.round(roof.width * roof.length)} m² ({Math.round(roof.width * roof.length * 10.764)} sq ft)</td></tr>
-                  <tr><td>{T.storeys[0]}<span className="ur">{T.storeys[1]}</span></td><td className="n">{plan.site.storeys}</td></tr>
-                  <tr><td>{T.parapet[0]}<span className="ur">{T.parapet[1]}</span></td><td className="n">{ph ? `${Math.round(ph / 0.3048)} ft` : `${T.none[0]} · ${T.none[1]}`}</td></tr>
-                  <tr><td>{T.panelSize[0]}<span className="ur">{T.panelSize[1]}</span></td><td className="n">{plan.panel.watts} W · {plan.panel.width.toFixed(2)} × {plan.panel.length.toFixed(2)} m</td></tr>
-                  <tr><td>{T.panelFits[0]}<span className="ur">{T.panelFits[1]}</span></td><td className="n"><b>{plan.layout.maxPanels}</b> / {T.panelsRequired[0].toLowerCase()} <b>{panelsWanted}</b></td></tr>
-                  <tr><td>{T.rowSpacing[0]}<span className="ur">{T.rowSpacing[1]}</span></td><td className="n">{plan.layout.pitch.toFixed(1)} m</td></tr>
+                  <tr><td><L t={T.roofSize} /></td><td className="n"><b>{roof.width} m × {roof.length} m</b></td></tr>
+                  <tr><td><L t={T.roofArea} /></td><td className="n">{Math.round(roof.width * roof.length)} m² ({Math.round(roof.width * roof.length * 10.764)} sq ft)</td></tr>
+                  <tr><td><L t={T.storeys} /></td><td className="n">{plan.site.storeys}</td></tr>
+                  <tr><td><L t={T.parapet} /></td><td className="n">{ph ? `${Math.round(ph / 0.3048)} ft` : <L t={T.none} sep=" · " />}</td></tr>
+                  <tr><td><L t={T.panelSize} /></td><td className="n">{plan.panel.watts} W · {plan.panel.width.toFixed(2)} × {plan.panel.length.toFixed(2)} m</td></tr>
+                  <tr><td><L t={T.panelFits} /></td><td className="n"><b>{plan.layout.maxPanels}</b> / <P inline t={[T.panelsRequired[0].toLowerCase(), T.panelsRequired[1]]} /> <b>{panelsWanted}</b></td></tr>
+                  <tr><td><L t={T.rowSpacing} /></td><td className="n">{plan.layout.pitch.toFixed(1)} m</td></tr>
                 </tbody>
               </Table>
             </div>
             <div>
-              <H2 style={{ marginBottom: 6 }}><b>{T.onRoof[0]}</b><span className="ur">{T.onRoof[1]}</span></H2>
+              <Hd t={T.onRoof} style={{ marginBottom: 6 }} />
               <Table>
                 <tbody>
-                  {Object.keys(itemCounts).length === 0 && <tr><td>{T.clearRoof[0]}<span className="ur">{T.clearRoof[1]}</span></td><td /></tr>}
+                  {Object.keys(itemCounts).length === 0 && <tr><td><L t={T.clearRoof} /></td><td /></tr>}
                   {Object.entries(itemCounts).map(([k, n]) => {
                     const [type, top] = k.split(':');
                     return (
                       <tr key={k}>
-                        <td>{(ROOF_ITEMS[type] || ROOF_ITEMS.other).label}{top ? ` (${T.onTheRoom[0]})` : ''}<span className="ur">{ROOF_ITEM_UR[type] || ROOF_ITEM_UR.other}{top ? ` (${T.onTheRoom[1]})` : ''}</span></td>
+                        <td><L t={[`${(ROOF_ITEMS[type] || ROOF_ITEMS.other).label}${top ? ` (${T.onTheRoom[0]})` : ''}`, `${ROOF_ITEM_UR[type] || ROOF_ITEM_UR.other}${top ? ` (${T.onTheRoom[1]})` : ''}`]} /></td>
                         <td className="n"><b>× {n}</b></td>
                       </tr>
                     );
                   })}
                 </tbody>
               </Table>
-              <H2 style={{ margin: '12px 0 6px' }}><b>{T.structures[0]}</b><span className="ur">{T.structures[1]}</span></H2>
+              <Hd t={T.structures} style={{ margin: '12px 0 6px' }} />
               <Table>
-                <thead><tr><th>{T.structure[0]}<span className="ur">{T.structure[1]}</span></th><th className="n">{T.panelFits[0]}<span className="ur">{T.panelFits[1]}</span></th></tr></thead>
+                <thead><tr><th><L t={T.structure} /></th><th className="n"><L t={T.panelFits} /></th></tr></thead>
                 <tbody>
                   {plan.structureOptions.map((o) => (
                     <tr key={o.key} className={o.key === S.key ? 'sel' : ''}>
-                      <td>{STRUCTURES[o.key].label}{o.key === S.key ? ` ✓ ${T.selected[0]}` : ''}<span className="ur">{STRUCTURE_UR[o.key]}</span></td>
+                      <td><L t={[`${STRUCTURES[o.key].label}${o.key === S.key ? ` ✓ ${T.selected[0]}` : ''}`, `${STRUCTURE_UR[o.key]}${o.key === S.key && lang === 'ur' ? ` ✓ ${T.selected[1]}` : ''}`]} /></td>
                       <td className="n" style={{ color: o.fits ? B.green : B.amber, fontWeight: 700 }}>{o.maxPanels}</td>
                     </tr>
                   ))}
@@ -269,24 +307,24 @@ const DesignReport = forwardRef(function DesignReport({ plan, roof, load, custom
       </Page>
 
       {/* ------------------------------ page 3 ------------------------------ */}
-      <Page className="report-page">
+      <Page className="report-page" data-lang={lang}>
         <Header logo={logo} />
         <Body>
-          <H2><b>{T.loadTitle[0]}</b><span className="ur">{T.loadTitle[1]}</span></H2>
+          <Hd t={T.loadTitle} />
           <Table>
             <thead>
               <tr>
-                <th>{T.appliance[0]}<span className="ur">{T.appliance[1]}</span></th>
-                <th className="n">{T.qty[0]}<span className="ur">{T.qty[1]}</span></th>
-                <th className="n">{T.watts[0]}<span className="ur">{T.watts[1]}</span></th>
-                <th className="n">{T.hours[0]}<span className="ur">{T.hours[1]}</span></th>
-                <th className="n">{T.units[0]}<span className="ur">{T.units[1]}</span></th>
+                <th><L t={T.appliance} /></th>
+                <th className="n"><L t={T.qty} /></th>
+                <th className="n"><L t={T.watts} /></th>
+                <th className="n"><L t={T.hours} /></th>
+                <th className="n"><L t={T.units} /></th>
               </tr>
             </thead>
             <tbody>
               {loadRows.map((r) => (
                 <tr key={r.id}>
-                  <td>{r.a.name}{r.a.note ? ` (${r.a.note})` : ''}<span className="ur">{APPLIANCE_UR[r.id] || ''}</span></td>
+                  <td><L t={[`${r.a.name}${r.a.note ? ` (${r.a.note})` : ''}`, APPLIANCE_UR[r.id] || r.a.name]} /></td>
                   <td className="n">{r.qty}</td>
                   <td className="n">{r.a.watts}</td>
                   <td className="n">{r.hours}</td>
@@ -294,7 +332,7 @@ const DesignReport = forwardRef(function DesignReport({ plan, roof, load, custom
                 </tr>
               ))}
               <tr className="tot">
-                <td>{T.total[0]} · <span className="ur" style={{ display: 'inline' }}>{T.total[1]}</span></td>
+                <td><L t={T.total} sep=" · " /></td>
                 <td className="n">{loadRows.reduce((s, r) => s + r.qty, 0)}</td>
                 <td className="n" />
                 <td className="n" />
@@ -305,7 +343,7 @@ const DesignReport = forwardRef(function DesignReport({ plan, roof, load, custom
 
           <Two $cols="1.3fr 1fr">
             <div>
-              <H2 style={{ marginBottom: 6 }}><b>{T.dayProfile[0]}</b><span className="ur">{T.dayProfile[1]}</span></H2>
+              <Hd t={T.dayProfile} style={{ marginBottom: 6 }} />
               <svg width="420" height="170" viewBox="0 0 420 170">
                 <rect x="0" y="0" width="420" height="170" fill="#fff" />
                 {plan.loadKw.map((l, k) => {
@@ -322,39 +360,39 @@ const DesignReport = forwardRef(function DesignReport({ plan, roof, load, custom
                 <text x="2" y="20" fontSize="9" fill="#64748b" fontFamily="Inter, Arial">{peak.toFixed(1)} kW</text>
               </svg>
               <Legend>
-                <span><i style={{ background: '#f7b31b' }} />{T.solar[0]} <span className="ur">{T.solar[1]}</span></span>
-                <span><i style={{ background: '#1a4fb4' }} />{T.load[0]} <span className="ur">{T.load[1]}</span></span>
+                <span><i style={{ background: '#f7b31b' }} /><L t={T.solar} sep=" " /></span>
+                <span><i style={{ background: '#1a4fb4' }} /><L t={T.load} sep=" " /></span>
               </Legend>
             </div>
             <div>
-              <H2 style={{ marginBottom: 6 }}><b>{T.solarPerDay[0]}</b><span className="ur">{T.solarPerDay[1]}</span></H2>
+              <Hd t={T.solarPerDay} style={{ marginBottom: 6 }} />
               <Table>
                 <tbody>
-                  <tr><td>{T.location[0]}<span className="ur">{T.location[1]}</span></td><td className="n">{plan.city.name}</td></tr>
-                  <tr><td>{T.season[0]}<span className="ur">{T.season[1]}</span></td><td className="n">{seasonEn}<span className="ur" style={{ textAlign: 'right' }}>{SEASON_UR[plan.season] || ''}</span></td></tr>
-                  <tr><td>{T.sunHours[0]}<span className="ur">{T.sunHours[1]}</span></td><td className="n">{plan.sunHours.toFixed(1)} h</td></tr>
-                  <tr><td>{T.solarPerDay[0]} ({T.perDay[0]})<span className="ur">{T.solarPerDay[1]} ({T.perDay[1]})</span></td><td className="n"><b>{kwh(plan.solarKWh)}</b></td></tr>
-                  <tr><td>{T.billBefore[0]}<span className="ur">{T.billBefore[1]}</span></td><td className="n">{pkr(plan.billBefore)}</td></tr>
-                  <tr><td>{T.billAfter[0]}<span className="ur">{T.billAfter[1]}</span></td><td className="n" style={{ color: B.green, fontWeight: 700 }}>{pkr(plan.billAfter)}</td></tr>
+                  <tr><td><L t={T.location} /></td><td className="n">{plan.city.name}</td></tr>
+                  <tr><td><L t={T.season} /></td><td className="n"><L t={[seasonEn, SEASON_UR[plan.season] || seasonEn]} /></td></tr>
+                  <tr><td><L t={T.sunHours} /></td><td className="n">{plan.sunHours.toFixed(1)} h</td></tr>
+                  <tr><td><L t={[`${T.solarPerDay[0]} (${T.perDay[0]})`, `${T.solarPerDay[1]} (${T.perDay[1]})`]} /></td><td className="n"><b>{kwh(plan.solarKWh)}</b></td></tr>
+                  <tr><td><L t={T.billBefore} /></td><td className="n">{pkr(plan.billBefore)}</td></tr>
+                  <tr><td><L t={T.billAfter} /></td><td className="n" style={{ color: B.green, fontWeight: 700 }}>{pkr(plan.billAfter)}</td></tr>
                 </tbody>
               </Table>
             </div>
           </Two>
 
-          <H2><b>{T.notesTitle[0]}</b><span className="ur">{T.notesTitle[1]}</span></H2>
-          <Notes>
-            {[T.note1, T.note2, T.note3].map((n) => <p key={n[0]}><span>{n[0]}</span><span className="ur">{n[1]}</span></p>)}
+          <Hd t={T.notesTitle} />
+          <Notes $one={lang !== 'both'}>
+            {[T.note1, T.note2, T.note3].map((n) => <p key={n[0]}>{lang !== 'ur' && <span>{n[0]}</span>}{lang !== 'en' && <span className="ur">{n[1]}</span>}</p>)}
           </Notes>
           <div style={{ marginTop: 'auto', marginBottom: 14 }}>
             <Contact>
               <img src={logo} alt="" />
-              <div>
+              <div className="addr">
                 <b>{company.name}</b>
                 <div style={{ fontSize: 11, color: '#cbd5e1' }}>{company.address.line1}, {company.address.line2}, {company.address.city}</div>
                 <div style={{ fontSize: 11, color: '#cbd5e1' }}>{ceo.name} · {ceo.role}</div>
               </div>
               <div className="ph">
-                <span>{T.contact[0]} · <span className="ur">{T.contact[1]}</span></span>
+                <span><L t={T.contact} sep=" · " /></span>
                 <b>{company.phones[0].display}</b>
                 <span>{company.phones[1].display} · {company.website}</span>
               </div>
@@ -364,6 +402,7 @@ const DesignReport = forwardRef(function DesignReport({ plan, roof, load, custom
         <Footer n={3} total={3} designNo={designNo} />
       </Page>
     </div>
+    </LangCtx.Provider>
   );
 });
 
