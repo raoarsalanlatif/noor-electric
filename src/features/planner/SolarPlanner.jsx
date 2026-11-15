@@ -8,6 +8,7 @@ import InputsPanel from './InputsPanel';
 import Analytics from './Analytics';
 import BookingCard from './BookingCard';
 import ExportCard from './ExportCard';
+import PerformanceMeter from './PerformanceMeter';
 import { computePlan } from './sizing';
 import { DEFAULT_LOAD } from './appliances';
 import { CITIES, DEFAULT_SITE, ROOF_ITEMS, SURROUNDING } from './config';
@@ -233,6 +234,7 @@ export default function SolarPlanner() {
   const [editing, setEditing] = useState(false);
   const [tool, setTool] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
+  const [shadeMap, setShadeMap] = useState(false);
   const sceneRef = useRef(null);
   const captureRef = useRef(null);
   // A clean daytime picture of the finished install for the report.
@@ -358,7 +360,7 @@ export default function SolarPlanner() {
           <SceneWrap $status={plan.status} ref={sceneRef} $full={fs.active}>
             <Suspense fallback={<Loading>Building your roof…</Loading>}>
               <RoofScene plan={plan} roof={roof} site={site} lat={location.lat} season={season}
-                clock={clock} onHour={onHour} crewCtl={crewCtl} onProgress={onProgress} editor={editor} captureRef={captureRef} />
+                clock={clock} onHour={onHour} crewCtl={crewCtl} onProgress={onProgress} editor={editor} captureRef={captureRef} shadeMap={shadeMap && !editing} />
             </Suspense>
             {editing && (() => {
               const sel = plan.layout.obstacles.find((o) => o.id === selectedId) || plan.shading.buildings.find((b) => b.id === selectedId);
@@ -386,6 +388,7 @@ export default function SolarPlanner() {
                 {plan.sim.blackout[k] && <div style={{ color: '#fca5a5', fontWeight: 700 }}>{plan.sim.trip[k] ? 'Inverter tripped!' : 'Power cut — house is dark'}</div>}
               </div>
             </Banner>
+            <PerformanceMeter plan={plan} hour={k} shadeMap={shadeMap} onShadeMap={() => setShadeMap((v) => !v)} />
             <Crew>
               <span className="label">
                 {installing ? <>Installing panel <b>{progress.done + 1}</b> of {progress.total}</> : plan.overflow > 0 ? <><b>{progress.total - plan.overflow}</b> installed · <b style={{ color: t.red }}>{plan.overflow}</b> fell off the roof</> : <><b>{progress.total}</b> panels installed</>}
