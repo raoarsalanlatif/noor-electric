@@ -4,7 +4,7 @@ import styled from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faMinus, faPlus, faPlug, faRulerCombined, faSolarPanel, faLocationCrosshairs, faPenRuler, faXmark, faCheck } from '@fortawesome/free-solid-svg-icons';
 import { APPLIANCES } from './appliances';
-import { CITIES, PANEL_OPTIONS, INVERTER_SIZES, nearestCity, ROOF_ITEMS } from './config';
+import { CITIES, PANEL_OPTIONS, INVERTER_SIZES, nearestCity, ROOF_ITEMS, FACINGS, SURROUNDING } from './config';
 import { ITEM_ICONS } from './RoofEditorUI';
 import { SEASONS } from '../three/sun';
 import { Card, Label, Range, NumberInput, Select, Segmented, Seg, Toggle, Row, t } from './ui';
@@ -329,6 +329,38 @@ function SiteTab({ location, setLocation, season, setSeason, site, setSite, roof
         ))}
       </QuickAdd>
       <EditRoof type="button" onClick={onEditRoof}><FontAwesomeIcon icon={faPenRuler} /> Arrange my roof in 3D</EditRoof>
+
+      <SubHead>Around your house</SubHead>
+      <Field>
+        <Label htmlFor="pl-facing">Front of the house faces</Label>
+        <Select id="pl-facing" value={plan.shading.facing} onChange={(e) => set({ facing: Number(e.target.value) })}>
+          {FACINGS.map((f) => <option key={f.deg} value={f.deg}>{f.label}{f.deg === 180 ? ' (best for solar)' : ''}</option>)}
+        </Select>
+        <Hint>Panels lean towards the front of the house. The sun and shadows in the 3D view follow this direction.</Hint>
+      </Field>
+      <Hint style={{ marginBottom: 8 }}>Add the buildings next to your house, with their real height, to see whether their shadow reaches your panels.</Hint>
+      {plan.shading.buildings.length > 0 && (
+        <Items>
+          {plan.shading.buildings.map((b) => (
+            <li key={b.id}>
+              <FontAwesomeIcon icon={ITEM_ICONS.building} />
+              <span>{SURROUNDING.label}</span>
+              <small>{b.w.toFixed(1)}×{b.d.toFixed(1)} × {b.h.toFixed(1)} m</small>
+              <button type="button" aria-label={`Remove ${SURROUNDING.label}`} onClick={() => onRemoveItem(b.id)}><FontAwesomeIcon icon={faXmark} /></button>
+            </li>
+          ))}
+        </Items>
+      )}
+      <QuickAdd>
+        <button type="button" onClick={() => onAddItem('building')}><FontAwesomeIcon icon={faPlus} /> {SURROUNDING.label}</button>
+      </QuickAdd>
+      {plan.shading.buildings.length > 0 && (
+        <Hint style={{ color: plan.shading.lossPct >= 3 ? t.amber : t.green }}>
+          {plan.shading.lossPct >= 0.5
+            ? `Their shadow costs about ${Math.round(plan.shading.lossPct)}% of the day's solar energy (${SEASONS[plan.season]?.label.toLowerCase() || 'this season'}).`
+            : 'Their shadow does not reach your panels in this season. Check winter too — the sun is lowest then.'}
+        </Hint>
+      )}
 
       <StructurePicker site={site} setSite={setSite} plan={plan} />
 

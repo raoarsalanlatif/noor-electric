@@ -9,6 +9,7 @@ import { houseHeight } from '../three/dims';
 import SolarPanelModel, { PanelLegs, PANEL_TILT } from '../three/SolarPanelModel';
 import Worker from '../three/Worker';
 import { sunPosition } from '../three/sun';
+import { plasterTexture } from '../three/textures';
 
 
 /* ---------------------------------- clock --------------------------------- */
@@ -341,15 +342,19 @@ function Snapshot({ captureRef }) {
 }
 
 /* ------------------------------ camera rig ------------------------------- */
-function CameraRig({ roof, height, controls, editing }) {
+function CameraRig({ roof, height, controls, editing, wide }) {
   const { camera } = useThree();
   const dist = Math.max(roof.width, roof.length) * 1.05 + 13;
-  // the editor looks down onto the roof so items are easy to place and drag
-  const target = useMemo(() => (editing
-    ? new THREE.Vector3(dist * 0.12, height + dist * 0.92, dist * 0.5)
-    : new THREE.Vector3(dist * 0.62, height + dist * 0.42, dist * 0.82)), [dist, height, editing]);
+  // the editor looks down onto the roof so items are easy to place and drag;
+  // it pulls back when the customer is placing the buildings around the house
+  const target = useMemo(() => {
+    if (editing && wide) return new THREE.Vector3(dist * 0.2, height + dist * 2.1, dist * 1.25);
+    return editing
+      ? new THREE.Vector3(dist * 0.12, height + dist * 0.92, dist * 0.5)
+      : new THREE.Vector3(dist * 0.62, height + dist * 0.42, dist * 0.82);
+  }, [dist, height, editing, wide]);
   const moving = useRef(true);
-  useEffect(() => { moving.current = true; }, [dist, height, editing]);
+  useEffect(() => { moving.current = true; }, [dist, height, editing, wide]);
   useFrame(() => {
     if (!moving.current) return;
     camera.position.lerp(target, 0.05);
@@ -359,11 +364,45 @@ function CameraRig({ roof, height, controls, editing }) {
   return null;
 }
 
+/* ---------------------------- nearby buildings ---------------------------- */
+// A plain building the customer placed next to the house; it casts a real shadow on the roof.
+function NearbyBuilding({ b }) {
+  const plaster = useMemo(() => {
+    const tx = plasterTexture([b.w / 3, b.h / 3]).clone();
+    tx.needsUpdate = true;
+    return tx;
+  }, [b.w, b.h]);
+  const floors = Math.max(1, Math.round(b.h / 3.2));
+  const fh = b.h / floors;
+  return (
+    <group position={[b.x, 0, b.z]}>
+      <mesh position={[0, b.h / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[b.w, b.h, b.d]} />
+        <meshStandardMaterial map={plaster} color="#e6e1d8" roughness={0.95} />
+      </mesh>
+      <mesh position={[0, b.h + 0.12, 0]} castShadow>
+        <boxGeometry args={[b.w + 0.25, 0.24, b.d + 0.25]} />
+        <meshStandardMaterial color="#cfc6b6" roughness={0.9} />
+      </mesh>
+      {Array.from({ length: floors }).map((_, f) => (
+        <group key={f} position={[0, (f + 0.55) * fh, 0]}>
+          {[[0, b.d / 2 + 0.01, 0, b.w], [0, -b.d / 2 - 0.01, Math.PI, b.w], [b.w / 2 + 0.01, 0, Math.PI / 2, b.d], [-b.w / 2 - 0.01, 0, -Math.PI / 2, b.d]].map(([x, z, ry, len], i) => (
+            <mesh key={i} position={[x, 0, z]} rotation={[0, ry, 0]}>
+              <planeGeometry args={[len * 0.72, Math.min(1.3, fh * 0.42)]} />
+              <meshStandardMaterial color="#2a3b4f" metalness={0.5} roughness={0.2} />
+            </mesh>
+          ))}
+        </group>
+      ))}
+    </group>
+  );
+}
+
 /* ------------------------------ roof editor ------------------------------ */
 // Click the roof to place the chosen item, drag items to move them. Red areas are where
 // panels can't go (the item, a walkway around it and its shadow); blue outlines are the
 // panel positions that remain for the current structure.
-function RoofEditor({ layout, roof, roofTop, tool, selectedId, onPlace, onSelect, onMoveItem, onDragChange }) {
+function RoofEditor({ layout, roof, roofTop, tool, selectedId, onPlace, onSelect, onMoveItem, onDragChange, buildings = [], south = [0, 1] }) {
   const [drag, setDrag] = useState(null);
   const setCursor = (c) => { document.body.style.cursor = c; };
   useEffect(() => () => setCursor(''), []);
@@ -386,6 +425,7 @@ function RoofEditor({ layout, roof, roofTop, tool, selectedId, onPlace, onSelect
         onPointerDown={(e) => {
           if (drag) return;
           e.stopPropagation();
+          if (tool === 'building') return; // buildings go on the ground, not on the roof
           if (tool) onPlace(tool, e.point.x, e.point.z); else onSelect(null);
         }}
       >
@@ -439,10 +479,42 @@ function RoofEditor({ layout, roof, roofTop, tool, selectedId, onPlace, onSelect
         );
       })}
 
+      {/* ground around the house: click to place a nearby building */}
+      {tool === 'building' && (
+        <mesh position={[0, 0.07, 0]} rotation={[-Math.PI / 2, 0, 0]} onPointerDown={(e) => { if (drag) return; e.stopPropagation(); onPlace('building', e.point.x, e.point.z); }}>
+          <planeGeometry args={[320, 320]} />
+          <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+        </mesh>
+      )}
+
+      {/* grab handles for the nearby buildings */}
+      {buildings.map((b) => {
+        const selected = b.id === selectedId;
+        return (
+          <mesh
+            key={b.id}
+            position={[b.x, b.h / 2 + 0.3, b.z]}
+            onPointerOver={(e) => { e.stopPropagation(); if (!drag) setCursor('grab'); }}
+            onPointerOut={() => { if (!drag) setCursor(tool ? 'copy' : ''); }}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              onSelect(b.id);
+              setDrag({ id: b.id, dx: b.x - e.point.x, dz: b.z - e.point.z, y: e.point.y });
+              onDragChange(true);
+              setCursor('grabbing');
+            }}
+          >
+            <boxGeometry args={[b.w + 0.3, b.h + 0.7, b.d + 0.3]} />
+            <meshBasicMaterial transparent opacity={selected ? 0.14 : 0} color="#facc15" depthWrite={false} />
+            {selected && <Edges color="#facc15" lineWidth={2} />}
+          </mesh>
+        );
+      })}
+
       {/* invisible floor that follows the pointer while dragging */}
       {drag && (
         <mesh
-          position={[0, roofTop, 0]} rotation={[-Math.PI / 2, 0, 0]}
+          position={[0, drag.y ?? roofTop, 0]} rotation={[-Math.PI / 2, 0, 0]}
           onPointerMove={(e) => { e.stopPropagation(); onMoveItem(drag.id, e.point.x + drag.dx, e.point.z + drag.dz); }}
           onPointerUp={(e) => { e.stopPropagation(); endDrag(); }}
         >
@@ -450,11 +522,16 @@ function RoofEditor({ layout, roof, roofTop, tool, selectedId, onPlace, onSelect
           <meshBasicMaterial transparent opacity={0} depthWrite={false} />
         </mesh>
       )}
-      {/* small marker showing which way is south (the sun side) */}
-      <mesh position={[0, y + 0.02, roof.length / 2 - 0.35]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
-        <circleGeometry args={[0.22, 3]} />
-        <meshBasicMaterial color="#fbbf24" />
-      </mesh>
+      {/* small marker on the roof edge showing which way is south (the sun side) */}
+      <group
+        position={[south[0] * (roof.width / 2 - 0.35), y + 0.02, south[1] * (roof.length / 2 - 0.35)]}
+        rotation={[0, Math.atan2(-south[1], south[0]), 0]}
+      >
+        <mesh rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
+          <circleGeometry args={[0.22, 3]} />
+          <meshBasicMaterial color="#fbbf24" />
+        </mesh>
+      </group>
     </group>
   );
 }
@@ -473,6 +550,14 @@ function SceneContent({ plan, roof, site, lat, season, clock, onHour, crewCtl, o
   const { structure } = plan;
   const elevated = structure.key === 'elevated';
   const base = structure.frontH;
+  const { facing, buildings } = plan.shading;
+  // direction of south on the roof (x, z), for the editor's sun-side marker
+  const south = useMemo(() => { const a = ((360 - facing) * Math.PI) / 180; return [Math.sin(a), -Math.cos(a)]; }, [facing]);
+  // the sun's shadow map has to reach the nearby buildings as well as the house
+  const shadowSize = useMemo(() => buildings.reduce(
+    (m, b) => Math.max(m, Math.abs(b.x) + b.w / 2 + 3, Math.abs(b.z) + b.d / 2 + 3, b.h + 3),
+    Math.max(roof.width, roof.length) + 8,
+  ), [buildings, roof.width, roof.length]);
 
   useFrame(() => {
     const h = clock.current.hour; const k = Math.floor(h) % 24;
@@ -493,11 +578,13 @@ function SceneContent({ plan, roof, site, lat, season, clock, onHour, crewCtl, o
     <>
       <Clock clock={clock} onHour={onHour} />
       <Snapshot captureRef={captureRef} />
-      <SkySystem clock={clock} lat={lat} season={season} shadowSize={Math.max(roof.width, roof.length) + 8} />
-      <CameraRig roof={roof} height={roofTop} controls={controls} editing={editing} />
+      <SkySystem clock={clock} lat={lat} season={season} shadowSize={Math.min(70, shadowSize)} facing={facing} />
+      <CameraRig roof={roof} height={roofTop} controls={controls} editing={editing} wide={Boolean(editor?.wide)} />
       <OrbitControls ref={controls} enabled={!dragging} enablePan={false} minDistance={8} maxDistance={110} maxPolarAngle={Math.PI / 2.08} />
 
-      <Neighbourhood roof={roof} clock={clock} lat={lat} season={season} />
+      {/* once the customer adds the real buildings around the house, the decorative ones are hidden */}
+      <Neighbourhood roof={roof} clock={clock} lat={lat} season={season} houses={buildings.length === 0} />
+      {buildings.map((b) => <NearbyBuilding key={b.id} b={b} />)}
       <ContactShadows position={[0, 0.04, 0]} opacity={0.3} scale={70} blur={2.4} far={14} />
       <HouseModel roof={roof} site={site} obstacles={layout.obstacles} failing={failing} litRef={lit} />
       {elevated && !editing && <ElevatedFrame layout={layout} roofTop={roofTop} panel={panel} />}
@@ -506,7 +593,7 @@ function SceneContent({ plan, roof, site, lat, season, clock, onHour, crewCtl, o
           layout={layout} roof={roof} roofTop={roofTop}
           tool={editor.tool} selectedId={editor.selectedId}
           onPlace={editor.onPlace} onSelect={editor.onSelect} onMoveItem={editor.onMoveItem}
-          onDragChange={setDragging}
+          onDragChange={setDragging} buildings={buildings} south={south}
         />
       )}
       <Equipment roof={roof} overloaded={overloaded} socRef={soc} hasBattery={chosen.batteryKWh > 0} />

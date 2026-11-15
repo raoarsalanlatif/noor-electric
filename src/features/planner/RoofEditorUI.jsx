@@ -2,12 +2,12 @@
 import styled from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-  faDoorClosed, faFaucetDrip, faFan, faTemperatureHigh, faCube, faCheck, faRotate, faTrash, faCopy, faHandPointer, faExpand, faCompress,
+  faDoorClosed, faFaucetDrip, faFan, faTemperatureHigh, faCube, faCheck, faRotate, faTrash, faCopy, faHandPointer, faExpand, faCompress, faBuilding,
 } from '@fortawesome/free-solid-svg-icons';
-import { ROOF_ITEMS } from './config';
+import { ROOF_ITEMS, SURROUNDING } from './config';
 import { t } from './ui';
 
-export const ITEM_ICONS = { room: faDoorClosed, tank: faFaucetDrip, ac: faFan, geyser: faTemperatureHigh, other: faCube };
+export const ITEM_ICONS = { room: faDoorClosed, tank: faFaucetDrip, ac: faFan, geyser: faTemperatureHigh, other: faCube, building: faBuilding };
 
 const Bar = styled.div`
   position: absolute; top: 12px; left: 12px; right: 12px; z-index: 3;
@@ -19,6 +19,7 @@ const Bar = styled.div`
   button:hover { border-color: ${t.orange}; }
   button.on { background: ${t.orange}; color: #111; border-color: ${t.orange}; }
   .fs { margin-left: auto; }
+  .sep { width: 1px; align-self: stretch; background: ${t.line}; margin: 0 2px; }
   .done { background: #22c55e; color: #052e16; border-color: #22c55e; }
   @media (max-width: 640px) { .title { width: 100%; } button span { display: none; } .done span { display: inline; } }
 `;
@@ -51,6 +52,10 @@ export function EditorToolbar({ tool, setTool, onDone, structureLabel, fits, ful
           <FontAwesomeIcon icon={ITEM_ICONS[key]} /><span>{it.short}</span>
         </button>
       ))}
+      <span className="sep" />
+      <button type="button" className={tool === 'building' ? 'on' : ''} onClick={() => setTool(tool === 'building' ? null : 'building')} title="Place a nearby building to see its shadow">
+        <FontAwesomeIcon icon={faBuilding} /><span>{SURROUNDING.label}</span>
+      </button>
       {onFullscreen && (
         <button type="button" className="fs" onClick={onFullscreen} aria-label={fullscreen ? 'Exit full screen' : 'View full screen'} title={fullscreen ? 'Exit full screen (Esc)' : 'Full screen'}>
           <FontAwesomeIcon icon={fullscreen ? faCompress : faExpand} />
@@ -66,7 +71,7 @@ export function EditorInspector({ item, tool, onChange, onRotate, onDuplicate, o
     return (
       <Inspector>
         <FontAwesomeIcon icon={faHandPointer} style={{ color: t.orange }} />
-        <span>{tool ? <>Click on the roof to place the <b>{ROOF_ITEMS[tool].label.toLowerCase()}</b>.</> : <>Pick an item above and click the roof to place it. Drag items to move them; click one to edit its size.</>}</span>
+        <span>{tool === 'building' ? <>Click on the ground next to the house to place a <b>nearby building</b>.</> : tool ? <>Click on the roof to place the <b>{ROOF_ITEMS[tool].label.toLowerCase()}</b>.</> : <>Pick an item above and click the roof to place it. Drag items to move them; click one to edit its size.</>}</span>
         <span className="legend" style={{ marginLeft: 'auto' }}>
           <span><i className="sw" style={{ background: '#60a5fa88' }} />Panel spots</span>
           <span><i className="sw" style={{ background: '#ef444488' }} />Blocked</span>
@@ -75,14 +80,20 @@ export function EditorInspector({ item, tool, onChange, onRotate, onDuplicate, o
       </Inspector>
     );
   }
-  const def = ROOF_ITEMS[item.type] || ROOF_ITEMS.other;
+  const building = item.type === 'building';
+  const def = building ? SURROUNDING : ROOF_ITEMS[item.type] || ROOF_ITEMS.other;
   const field = (k, label, min, max) => (
     <label>{label}<input type="number" step="0.1" min={min} max={max} value={item[k]} onChange={(e) => onChange({ [k]: num(e.target.value, min, max) })} />m</label>
   );
   return (
     <Inspector>
       <b><FontAwesomeIcon icon={ITEM_ICONS[item.type] || faCube} /> {def.label}</b>
-      {item.type === 'tank' ? (
+      {building ? (
+        <>
+          {field('w', 'Width', 2, 60)}{field('d', 'Depth', 2, 60)}{field('h', 'Height', 2, 120)}
+          <span>≈ {Math.max(1, Math.round(item.h / 3.2))} storey{Math.round(item.h / 3.2) > 1 ? 's' : ''} · {Math.round(item.h / 0.3048)} ft · drag it to where it really stands</span>
+        </>
+      ) : item.type === 'tank' ? (
         <>{field('w', 'Diameter', 0.5, 3)}{field('h', 'Height', 0.5, 3)}</>
       ) : (
         <>{field('w', 'Width', 0.3, 12)}{field('d', 'Depth', 0.3, 12)}{field('h', 'Height', 0.2, 4)}</>

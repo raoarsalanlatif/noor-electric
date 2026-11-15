@@ -10,7 +10,7 @@ import BookingCard from './BookingCard';
 import ExportCard from './ExportCard';
 import { computePlan } from './sizing';
 import { DEFAULT_LOAD } from './appliances';
-import { CITIES, DEFAULT_SITE, ROOF_ITEMS } from './config';
+import { CITIES, DEFAULT_SITE, ROOF_ITEMS, SURROUNDING } from './config';
 import { EditorToolbar, EditorInspector } from './RoofEditorUI';
 import { useFullscreen, fullscreenCss } from '../../lib/useFullscreen';
 import { sunPosition } from '../three/sun';
@@ -247,23 +247,32 @@ export default function SolarPlanner() {
     return shot;
   }, []);
   const fs = useFullscreen(sceneRef);
-  const updateItems = useCallback((fn) => setSite((st) => ({ ...st, items: fn(st.items || []) })), []);
+  // Roof items live in site.items, nearby buildings in site.surroundings; an id is in one list or the other.
+  const updateItems = useCallback((fn, id) => setSite((st) => {
+    const key = id && (st.surroundings || []).some((b) => b.id === id) ? 'surroundings' : 'items';
+    return { ...st, [key]: fn(st[key] || []) };
+  }), []);
   const addItem = useCallback((type, x = 0, z = 0) => {
-    const def = ROOF_ITEMS[type] || ROOF_ITEMS.other;
     const id = `${type}-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4)}`;
-    updateItems((items) => [...items, { id, type, x, z, w: def.w, d: def.d, h: def.h }]);
+    if (type === 'building') {
+      const b = { id, type, x, z, w: SURROUNDING.w, d: SURROUNDING.d, h: SURROUNDING.h };
+      setSite((st) => ({ ...st, surroundings: [...(st.surroundings || []), b] }));
+    } else {
+      const def = ROOF_ITEMS[type] || ROOF_ITEMS.other;
+      updateItems((items) => [...items, { id, type, x, z, w: def.w, d: def.d, h: def.h }]);
+    }
     setSelectedId(id);
     setTool(null);
     return id;
   }, [updateItems]);
-  const moveItem = useCallback((id, x, z) => updateItems((items) => items.map((it) => (it.id === id ? { ...it, x, z } : it))), [updateItems]);
+  const moveItem = useCallback((id, x, z) => updateItems((items) => items.map((it) => (it.id === id ? { ...it, x, z } : it)), id), [updateItems]);
   const changeItem = (id, patch) => updateItems((items) => items.map((it) => {
     if (it.id !== id) return it;
     const next = { ...it, ...patch };
     if (it.type === 'tank' && patch.w) next.d = patch.w; // tanks are round
     return next;
-  }));
-  const removeItem = (id) => { updateItems((items) => items.filter((it) => it.id !== id)); setSelectedId(null); };
+  }), id);
+  const removeItem = (id) => { updateItems((items) => items.filter((it) => it.id !== id), id); setSelectedId(null); };
   const openEditor = () => {
     // edit in clear midday light
     clock.current.hour = 12.01; clock.current.playing = false; setPlaying(false); setHour(12);
@@ -274,12 +283,13 @@ export default function SolarPlanner() {
     setEditing(false); setTool(null); setSelectedId(null); crewCtl.current.replay += 1;
     clock.current.playing = true; setPlaying(true);
   };
+  const aroundHouse = tool === 'building' || (site.surroundings || []).some((b) => b.id === selectedId);
   const editor = useMemo(() => ({
-    editing, tool, selectedId,
+    editing, tool, selectedId, wide: aroundHouse,
     onPlace: (type, x, z) => addItem(type, x, z),
     onSelect: setSelectedId,
     onMoveItem: moveItem,
-  }), [editing, tool, selectedId, addItem, moveItem]);
+  }), [editing, tool, selectedId, aroundHouse, addItem, moveItem]);
 
   const plan = useMemo(
     () => computePlan({ load, location, season, site, roof, panelWatts, mode, custom, withBattery, offGrid }),
@@ -333,7 +343,8 @@ export default function SolarPlanner() {
             location={location} setLocation={setLocation}
             season={season} setSeason={setSeason}
             site={site} setSite={setSite}
-            onEditRoof={openEditor} onAddItem={(type) => { addItem(type, 0, 0); openEditor(); }} onRemoveItem={removeItem}
+            onEditRoof={openEditor} onRemoveItem={removeItem}
+            onAddItem={(type) => { if (type === 'building') addItem(type, 0, roof.length / 2 + SURROUNDING.d / 2 + 6); else addItem(type, 0, 0); openEditor(); }}
             roof={roof} setRoof={setRoof}
             panelWatts={panelWatts} setPanelWatts={setPanelWatts}
             mode={mode} setMode={setMode}
@@ -350,8 +361,8 @@ export default function SolarPlanner() {
                 clock={clock} onHour={onHour} crewCtl={crewCtl} onProgress={onProgress} editor={editor} captureRef={captureRef} />
             </Suspense>
             {editing && (() => {
-              const sel = plan.layout.obstacles.find((o) => o.id === selectedId);
-              const raw = (site.items || []).find((o) => o.id === selectedId);
+              const sel = plan.layout.obstacles.find((o) => o.id === selectedId) || plan.shading.buildings.find((b) => b.id === selectedId);
+              const raw = (site.items || []).find((o) => o.id === selectedId) || (site.surroundings || []).find((b) => b.id === selectedId);
               return (
                 <>
                   <EditorToolbar tool={tool} setTool={setTool} onDone={closeEditor} structureLabel={plan.structure.label} fits={plan.layout.maxPanels} fullscreen={fs.active} onFullscreen={fs.toggle} />
@@ -359,7 +370,7 @@ export default function SolarPlanner() {
                     item={raw && sel ? { ...raw, ...sel } : null} tool={tool}
                     onChange={(patch) => changeItem(selectedId, patch)}
                     onRotate={() => raw && changeItem(selectedId, { w: raw.d, d: raw.w })}
-                    onDuplicate={() => raw && addItem(raw.type, Math.min(roof.width / 2, raw.x + raw.w + 0.3), raw.z)}
+                    onDuplicate={() => raw && addItem(raw.type, raw.type === 'building' ? sel.x + sel.w + 1 : Math.min(roof.width / 2, raw.x + raw.w + 0.3), raw.type === 'building' ? sel.z : raw.z)}
                     onDelete={() => removeItem(selectedId)}
                   />
                 </>
@@ -371,6 +382,7 @@ export default function SolarPlanner() {
               <div className="live">
                 Sun <b>{plan.solarKw[k].toFixed(1)} kW</b> · Load <b>{plan.loadKw[k].toFixed(1)} kW</b>
                 {plan.chosen.batteryKWh > 0 && <> · Battery <b>{Math.round(plan.sim.soc[k])}%</b></>}
+                {plan.shading.shade[k] > 0.02 && <> · <span style={{ color: t.amber }}>Shade <b>{Math.round(plan.shading.shade[k] * 100)}%</b></span></>}
                 {plan.sim.blackout[k] && <div style={{ color: '#fca5a5', fontWeight: 700 }}>{plan.sim.trip[k] ? 'Inverter tripped!' : 'Power cut — house is dark'}</div>}
               </div>
             </Banner>
