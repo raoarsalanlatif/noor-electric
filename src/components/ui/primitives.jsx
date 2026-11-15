@@ -116,6 +116,50 @@ export function Reveal({ children, delay = 0, as }) {
   return <RevealBox ref={ref} as={as} $shown={shown} $delay={delay}>{children}</RevealBox>;
 }
 
+const TiltBox = styled.div`
+  position: relative; height: 100%;
+  transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition: transform 0.25s ease;
+  will-change: transform;
+  /* a soft highlight that follows the pointer, like light on a glossy card */
+  &::after {
+    content: ''; position: absolute; inset: 0; border-radius: ${(p) => p.$radius}px; pointer-events: none;
+    background: radial-gradient(420px circle at var(--gx, 50%) var(--gy, 0%), rgba(255,255,255,${(p) => (p.$dark ? 0.16 : 0.55)}), transparent 45%);
+    opacity: 0; transition: opacity 0.25s;
+  }
+  &[data-on='1'] { transition: transform 0.08s linear; }
+  &[data-on='1']::after { opacity: 1; }
+  @media (prefers-reduced-motion: reduce), (hover: none) { transform: none; &::after { display: none; } }
+`;
+
+/** Tilts its content in 3D towards the pointer (mouse only; still on touch screens and with reduced motion). */
+export function Tilt({ children, max = 7, radius = 22, dark = false }) {
+  const ref = useRef(null);
+  const move = (e) => {
+    if (e.pointerType !== 'mouse') return;
+    const el = ref.current; const r = el.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width; const y = (e.clientY - r.top) / r.height;
+    el.dataset.on = '1';
+    el.style.setProperty('--ry', `${(x - 0.5) * 2 * max}deg`);
+    el.style.setProperty('--rx', `${(0.5 - y) * 2 * max}deg`);
+    el.style.setProperty('--gx', `${x * 100}%`);
+    el.style.setProperty('--gy', `${y * 100}%`);
+  };
+  const leave = () => {
+    const el = ref.current; el.dataset.on = '0';
+    el.style.setProperty('--ry', '0deg'); el.style.setProperty('--rx', '0deg');
+  };
+  return <TiltBox ref={ref} $radius={radius} $dark={dark} onPointerMove={move} onPointerLeave={leave}>{children}</TiltBox>;
+}
+
+/** Soft glowing shapes behind a section, for depth. Put it first inside a Section. */
+export const Glow = styled.div`
+  position: absolute; inset: 0; pointer-events: none; overflow: hidden;
+  &::before, &::after { content: ''; position: absolute; border-radius: 50%; filter: blur(70px); }
+  &::before { width: 460px; height: 460px; left: -140px; top: -120px; background: ${brand.blueBright}26; }
+  &::after { width: 420px; height: 420px; right: -120px; bottom: -140px; background: ${brand.gold}2e; }
+`;
+
 /** Subtle solar-cell grid used on dark backgrounds, echoing the brand creatives. */
 export const GridPattern = styled.div`
   position: absolute;
