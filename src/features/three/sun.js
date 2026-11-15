@@ -40,3 +40,14 @@ export function dailyShape(lat, seasonKey) {
 
 /** 0 at night, 1 at high sun — used for lighting. */
 export const daylightFromAlt = (alt) => Math.max(0, Math.min(1, (alt + 4) / 30));
+
+/**
+ * Sun position in the house's own axes (+z = the front of the house) when the front faces
+ * compass bearing `facing` in degrees from north (180 = south, the default; 90 = east).
+ */
+export function sunFor(lat, seasonKey, hour, facing = 180) {
+  const p = sunPosition(lat, seasonKey, hour);
+  if (facing === 180) return p;
+  const a = (p.az - facing + 180) * RAD; const alt = p.alt * RAD;
+  return { ...p, dir: [Math.sin(a) * Math.cos(alt), Math.sin(alt), -Math.cos(a) * Math.cos(alt)] };
+}
