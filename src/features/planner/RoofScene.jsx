@@ -1,7 +1,7 @@
 /* eslint-disable react/prop-types, react/no-unknown-property */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls, ContactShadows, Edges } from '@react-three/drei';
+import { OrbitControls, ContactShadows, Edges, PerformanceMonitor } from '@react-three/drei';
 import * as THREE from 'three';
 import { SkySystem, Neighbourhood } from '../three/Environment';
 import HouseModel from '../three/HouseModel';
@@ -24,6 +24,28 @@ function Clock({ clock, onHour }) {
   return null;
 }
 
+/* ------------------------------ shadow pacer ------------------------------ */
+// Redrawing the shadow map is the most expensive part of a frame. It only has to be redrawn when something
+// that casts a shadow moves: every frame while the crew is working or the roof is being edited, otherwise
+// only when the sun has moved a little.
+function ShadowPacer({ clock, busy }) {
+  const { gl } = useThree();
+  const last = useRef(-99);
+  useEffect(() => {
+    gl.shadowMap.autoUpdate = false;
+    gl.shadowMap.needsUpdate = true;
+    return () => { gl.shadowMap.autoUpdate = true; };
+  }, [gl]);
+  useFrame((state) => {
+    const h = clock.current.hour;
+    if (state.clock.elapsedTime < busy.current || Math.abs(h - last.current) > 0.03) {
+      last.current = h;
+      gl.shadowMap.needsUpdate = true;
+    }
+  });
+  return null;
+}
+
 /* ---------------------------------- panel --------------------------------- */
 /** Shade-map colour: green (no loss) through amber to red (half the day's energy or more lost). */
 function heatColor(loss) {
@@ -33,7 +55,7 @@ function heatColor(loss) {
   return c;
 }
 
-function Panel({ index, slot, overflow, panel, installedRef, glow, structure, roofTop, seed, shadeRef, heat }) {
+function Panel({ index, slot, overflow, panel, installedRef, glow, structure, roofTop, seed, shadeRef, heat, realistic }) {
   const g = useRef();
   const cells = useRef();
   const st = useRef({ phase: 'hidden', vy: 0, t: 0 });
@@ -78,7 +100,7 @@ function Panel({ index, slot, overflow, panel, installedRef, glow, structure, ro
   return (
     <group ref={g} visible={false}>
       <group rotation={[PANEL_TILT, 0, 0]}>
-        <SolarPanelModel panel={panel} cellsRef={cells} />
+        <SolarPanelModel panel={panel} cellsRef={cells} realistic={realistic} />
         {/* shade map: how much of the day's energy this panel loses to nearby buildings */}
         {heat != null && !overflow && (
           <mesh position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -134,7 +156,7 @@ function ElevatedFrame({ layout, roofTop, panel }) {
 }
 
 /* ------------------------------ install crew ------------------------------ */
-function InstallCrew({ targets, panel, roof, roofTop, parapetH, installedRef, ctl, onProgress, depth }) {
+function InstallCrew({ targets, panel, roof, roofTop, parapetH, installedRef, ctl, onProgress, depth, realistic }) {
   const roofW = useRef(); const groundW = useRef();
   const roofAnim = useRef({ mode: 'idle', moving: false, speed: 1 });
   const groundAnim = useRef({ mode: 'idle', moving: false, speed: 1 });
@@ -254,7 +276,7 @@ function InstallCrew({ targets, panel, roof, roofTop, parapetH, installedRef, ct
       <Worker ref={roofW} anim={roofAnim} />
       <Worker ref={groundW} anim={groundAnim} skin="#a8714d" pants="#3f3f46" />
       <group ref={carried} visible={false}>
-        <SolarPanelModel panel={panel} />
+        <SolarPanelModel panel={panel} realistic={realistic} />
       </group>
       <mesh ref={rope} position={[hoistX, (roofTop + parapetH + 1.6) / 2, hoistZ]} visible={false}>
         <cylinderGeometry args={[0.015, 0.015, roofTop + parapetH + 1.6, 6]} />
@@ -353,6 +375,7 @@ function Snapshot({ captureRef }) {
   useEffect(() => {
     if (!captureRef) return undefined;
     captureRef.current = () => { gl.render(scene, camera); return gl.domElement.toDataURL('image/jpeg', 0.92); };
+    if (import.meta.env.DEV) window.__planner3d = { gl, scene }; // lets the dev tools read draw-call counts
     return () => { captureRef.current = null; };
   }, [gl, scene, camera, captureRef]);
   return null;
@@ -554,11 +577,19 @@ function RoofEditor({ layout, roof, roofTop, tool, selectedId, onPlace, onSelect
 }
 
 /* --------------------------------- scene --------------------------------- */
-function SceneContent({ plan, roof, site, lat, season, clock, onHour, crewCtl, onProgress, editor, captureRef, shadeMap }) {
+function SceneContent({ plan, roof, site, lat, season, clock, onHour, crewCtl, onProgress, editor, captureRef, shadeMap, rich = true }) {
   const editing = Boolean(editor?.editing);
   const [dragging, setDragging] = useState(false);
   const controls = useRef();
   const glow = useRef(0); const lit = useRef(0); const soc = useRef(50); const shadeNow = useRef(null);
+  // shadows are redrawn every frame until this time (seconds on the scene clock); see ShadowPacer
+  const busy = useRef(Infinity);
+  const sceneClock = useThree((st) => st.clock);
+  useEffect(() => { busy.current = editing || dragging ? Infinity : sceneClock.elapsedTime + 4; }, [plan, site, roof, editing, dragging, sceneClock]);
+  const report = useMemo(() => (done, total) => {
+    busy.current = done < total ? Infinity : Math.max(sceneClock.elapsedTime + 4, busy.current === Infinity ? 0 : busy.current);
+    onProgress(done, total);
+  }, [onProgress, sceneClock]);
   const installedRef = useRef(0);
   const { layout, panel, chosen } = plan;
   const roofTop = houseHeight(site);
@@ -596,14 +627,16 @@ function SceneContent({ plan, roof, site, lat, season, clock, onHour, crewCtl, o
     <>
       <Clock clock={clock} onHour={onHour} />
       <Snapshot captureRef={captureRef} />
-      <SkySystem clock={clock} lat={lat} season={season} shadowSize={Math.min(70, shadowSize)} facing={facing} />
+      <ShadowPacer clock={clock} busy={busy} />
+      <SkySystem clock={clock} lat={lat} season={season} shadowSize={Math.min(70, shadowSize)} facing={facing} reflections={rich} />
       <CameraRig roof={roof} height={roofTop} controls={controls} editing={editing} wide={Boolean(editor?.wide)} />
       <OrbitControls ref={controls} enabled={!dragging} enablePan={false} minDistance={8} maxDistance={110} maxPolarAngle={Math.PI / 2.08} />
 
       {/* once the customer adds the real buildings around the house, the decorative ones are hidden */}
-      <Neighbourhood roof={roof} clock={clock} lat={lat} season={season} houses={buildings.length === 0} />
+      <Neighbourhood roof={roof} clock={clock} lat={lat} season={season} houses={buildings.length === 0} lawn />
       {buildings.map((b) => <NearbyBuilding key={b.id} b={b} />)}
-      <ContactShadows position={[0, 0.04, 0]} opacity={0.3} scale={70} blur={2.4} far={14} />
+      {/* soft ground shadow under the house: drawn once, and again only when the house or its neighbours change */}
+      <ContactShadows key={`${roof.width}:${roof.length}:${roofTop}:${buildings.map((b) => `${b.x.toFixed(1)},${b.z.toFixed(1)},${b.w},${b.d}`).join(';')}`} frames={1} position={[0, 0.04, 0]} opacity={0.3} scale={70} blur={2.4} far={14} />
       <HouseModel roof={roof} site={site} obstacles={layout.obstacles} failing={failing} litRef={lit} />
       {elevated && !editing && <ElevatedFrame layout={layout} roofTop={roofTop} panel={panel} />}
       {editing && (
@@ -618,13 +651,13 @@ function SceneContent({ plan, roof, site, lat, season, clock, onHour, crewCtl, o
 
       {!editing && targets.map((t, i) => (
         <Panel key={i} index={i} slot={t.slot} overflow={t.overflow} panel={panel} installedRef={installedRef}
-          glow={glow} structure={structure} roofTop={roofTop} seed={i * 7 + 3}
+          glow={glow} structure={structure} roofTop={roofTop} seed={i * 7 + 3} realistic={rich}
           shadeRef={shadeNow} heat={shadeMap && plan.shading.panelHourly ? plan.shading.perPanel[i] ?? 0 : null} />
       ))}
       {!editing && (
       <InstallCrew
         targets={targets} panel={panel} roof={roof} roofTop={roofTop} parapetH={site.parapetH}
-        installedRef={installedRef} ctl={crewCtl} onProgress={onProgress} depth={layout.depth}
+        installedRef={installedRef} ctl={crewCtl} onProgress={report} depth={layout.depth} realistic={rich}
       />
       )}
     </>
@@ -632,9 +665,14 @@ function SceneContent({ plan, roof, site, lat, season, clock, onHour, crewCtl, o
 }
 
 export default function RoofScene(props) {
+  // Start with the best picture. If the device cannot hold a smooth frame rate, step down and stay there:
+  // first to standard resolution, then to the simpler lighting and panel materials (no sky reflections).
+  const [level, setLevel] = useState(0);
+  const dpr = level === 0 ? Math.min(2, typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1) : 1;
   return (
-    <Canvas shadows dpr={[1, 2]} gl={{ antialias: true }} camera={{ position: [60, 50, 70], fov: 40, near: 0.5, far: 6000 }}>
-      <SceneContent {...props} />
+    <Canvas shadows dpr={dpr} gl={{ antialias: true, powerPreference: 'high-performance' }} camera={{ position: [60, 50, 70], fov: 40, near: 0.5, far: 6000 }}>
+      <PerformanceMonitor bounds={() => [26, 55]} onDecline={() => setLevel((l) => Math.min(2, l + 1))} />
+      <SceneContent {...props} rich={level < 2} />
     </Canvas>
   );
 }
