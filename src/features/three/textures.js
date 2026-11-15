@@ -70,6 +70,37 @@ export const solarCellsTexture = () => make('cells', 512, 1024, (g, w, h) => {
   for (let r = 1; r < rows; r++) g.fillRect(0, r * ch - 1.5, w, 3);
 });
 
+/**
+ * A modern half-cut mono panel seen through glass: near-black cells, hairline gaps and fine busbars.
+ * Used by the Solar Planner's realistic panels.
+ */
+export const solarCellsTextureHD = () => {
+  const tex = make('cellsHD', 512, 1024, (g, w, h) => {
+    g.fillStyle = '#7f8a9b'; g.fillRect(0, 0, w, h); // backsheet showing through the gaps
+    const cols = 6; const rows = 24; const gap = 2; const mid = 10;
+    const cw = w / cols; const ch = (h - mid) / rows;
+    const r = rng(21);
+    for (let c = 0; c < cols; c++) {
+      for (let row = 0; row < rows; row++) {
+        const x = c * cw + gap / 2; const y = row * ch + gap / 2 + (row >= rows / 2 ? mid : 0);
+        const tone = 14 + Math.floor(r() * 7);
+        const cg = g.createLinearGradient(x, y, x + cw, y + ch);
+        cg.addColorStop(0, `rgb(${tone - 2},${tone + 14},${tone + 52})`);
+        cg.addColorStop(1, `rgb(${tone - 6},${tone + 6},${tone + 36})`);
+        g.fillStyle = cg;
+        g.fillRect(x, y, cw - gap, ch - gap);
+        g.strokeStyle = 'rgba(190,205,230,0.22)'; g.lineWidth = 0.7;
+        for (let b = 1; b <= 9; b++) {
+          const bx = x + ((cw - gap) * b) / 10;
+          g.beginPath(); g.moveTo(bx, y); g.lineTo(bx, y + ch - gap); g.stroke();
+        }
+      }
+    }
+  });
+  tex.anisotropy = 8;
+  return tex;
+};
+
 export const plasterTexture = (repeat = [2, 2]) => make('plaster', 256, 256, (g, w, h) => {
   g.fillStyle = '#efe6d6'; g.fillRect(0, 0, w, h);
   speckle(g, w, h, 2600, ['#e2d6c2', '#f7f0e4', '#d9ccb6'], 2.4, 7);
@@ -101,6 +132,31 @@ export const grassTexture = (repeat = [40, 40]) => make('grass', 256, 256, (g, w
   g.fillStyle = '#5f8f3e'; g.fillRect(0, 0, w, h);
   speckle(g, w, h, 5000, ['#4f7d32', '#73a24c', '#6a9444', '#3f6b28'], 3, 3);
 }, repeat);
+
+/** Softer lawn for the Solar Planner: broad patches plus fine blades, so it does not look like confetti from above. */
+export const lawnTexture = (repeat = [28, 28]) => {
+  const tex = make('lawn', 512, 512, (g, w, h) => {
+    g.fillStyle = '#557f39'; g.fillRect(0, 0, w, h);
+    const r = rng(17);
+    for (let i = 0; i < 90; i++) { // broad light/dark patches (wrapped so the tile repeats cleanly)
+      const x = r() * w; const y = r() * h; const rad = 30 + r() * 70;
+      const col = r() > 0.5 ? '108,150,72' : '60,98,40';
+      [[0, 0], [w, 0], [-w, 0], [0, h], [0, -h]].forEach(([ox, oy]) => {
+        const rg = g.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, rad);
+        rg.addColorStop(0, `rgba(${col},0.22)`); rg.addColorStop(1, `rgba(${col},0)`);
+        g.fillStyle = rg; g.fillRect(x + ox - rad, y + oy - rad, rad * 2, rad * 2);
+      });
+    }
+    for (let i = 0; i < 9000; i++) { // blades
+      g.fillStyle = ['#4b7631', '#6c9a49', '#5d8a3f', '#44692c'][Math.floor(r() * 4)];
+      g.globalAlpha = 0.18 + r() * 0.22;
+      g.fillRect(r() * w, r() * h, 1, 1.5 + r() * 2.5);
+    }
+    g.globalAlpha = 1;
+  }, repeat);
+  tex.anisotropy = 8;
+  return tex;
+};
 
 export const roadTexture = (repeat = [20, 1]) => make('road', 256, 128, (g, w, h) => {
   g.fillStyle = '#3d4248'; g.fillRect(0, 0, w, h);
