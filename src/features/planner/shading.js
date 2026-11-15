@@ -73,6 +73,7 @@ const ZEROS = Object.freeze(new Array(24).fill(0));
  *  - factor[24]   multiply the unshaded solar output of each hour by this
  *  - shade[24]    share of the panel area in shadow in each hour (0–1)
  *  - perPanel[]   share of each panel's daily energy lost to shade (0–1), in slot order
+ *  - panelHourly  [24][panel] share of each panel in shadow in each hour, or null without buildings
  *  - lossPct      daily energy lost to shade, % of what the same array would make unshaded
  *  - orientPct    daily energy change from the house direction, % (0 when the front faces south)
  *  - active       false when there is nothing to model (south-facing, no buildings): factor is all 1
@@ -80,7 +81,7 @@ const ZEROS = Object.freeze(new Array(24).fill(0));
 export function computeShading({ roof, site, layout, panel, installed, lat, season }) {
   const facing = facingOf(site);
   const buildings = surroundingBuildings(roof, site);
-  const base = { facing, buildings, factor: ONES, shade: ZEROS, perPanel: [], lossPct: 0, orientPct: 0, worstHour: null, active: false };
+  const base = { facing, buildings, factor: ONES, shade: ZEROS, perPanel: [], lossPct: 0, orientPct: 0, worstHour: null, panelHourly: null, active: false };
   const turned = facing !== 180;
   const slots = layout.slots.slice(0, installed);
   if (!turned && (!buildings.length || !slots.length)) return base;
@@ -91,7 +92,7 @@ export function computeShading({ roof, site, layout, panel, installed, lat, seas
   const normal = [0, Math.cos(TILT), Math.sin(TILT)]; // panels lean towards the front of the house
   const beam = CFG.shadeBeamShare;
 
-  const factor = []; const shade = [];
+  const factor = []; const shade = []; const panelHourly = [];
   const lost = new Array(slots.length).fill(0); // irradiance-weighted shade per panel
   let made = 0; let unshaded = 0; let south = 0;
   for (let k = 0; k < 24; k++) {
@@ -122,6 +123,8 @@ export function computeShading({ roof, site, layout, panel, installed, lat, seas
     unshaded += weights[k] * orient;
     made += weights[k] * orient * (1 - sh * beam);
     panelHits.forEach((n, i) => { lost[i] += weights[k] * orient * (n / (points[i].length * STEPS)) * beam; });
+    // share of the daylight sun positions in this hour at which each panel is shaded
+    panelHourly.push(panelHits.map((n) => (rays ? n / (rays / slots.length) : 0)));
   }
   let worstHour = null;
   shade.forEach((v, k) => { if (v > 0.02 && (worstHour === null || v * weights[k] > shade[worstHour] * weights[worstHour])) worstHour = k; });
@@ -131,6 +134,7 @@ export function computeShading({ roof, site, layout, panel, installed, lat, seas
     lossPct: unshaded > 0 ? (1 - made / unshaded) * 100 : 0,
     orientPct: south > 0 ? (unshaded / south - 1) * 100 : 0,
     worstHour,
+    panelHourly: buildings.length ? panelHourly : null,
     active: true,
   };
 }

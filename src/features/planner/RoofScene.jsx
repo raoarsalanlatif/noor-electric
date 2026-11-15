@@ -25,7 +25,15 @@ function Clock({ clock, onHour }) {
 }
 
 /* ---------------------------------- panel --------------------------------- */
-function Panel({ index, slot, overflow, panel, installedRef, glow, structure, roofTop, seed }) {
+/** Shade-map colour: green (no loss) through amber to red (half the day's energy or more lost). */
+function heatColor(loss) {
+  const v = Math.max(0, Math.min(1, loss / 0.5));
+  const c = new THREE.Color();
+  if (v < 0.5) c.set('#22c55e').lerp(new THREE.Color('#f59e0b'), v * 2); else c.set('#f59e0b').lerp(new THREE.Color('#ef4444'), (v - 0.5) * 2);
+  return c;
+}
+
+function Panel({ index, slot, overflow, panel, installedRef, glow, structure, roofTop, seed, shadeRef, heat }) {
   const g = useRef();
   const cells = useRef();
   const st = useRef({ phase: 'hidden', vy: 0, t: 0 });
@@ -62,13 +70,22 @@ function Panel({ index, slot, overflow, panel, installedRef, glow, structure, ro
     } else if (s.phase === 'down' && !overflow) {
       s.phase = 'hidden';
     }
-    if (cells.current) cells.current.emissiveIntensity = s.phase === 'placed' ? 0.02 + glow.current * 0.18 : 0.02;
+    // a panel in a building's shadow stops glowing
+    const lit = shadeRef?.current ? 1 - (shadeRef.current[index] || 0) : 1;
+    if (cells.current) cells.current.emissiveIntensity = s.phase === 'placed' ? 0.02 + glow.current * 0.18 * lit : 0.02;
   });
 
   return (
     <group ref={g} visible={false}>
       <group rotation={[PANEL_TILT, 0, 0]}>
         <SolarPanelModel panel={panel} cellsRef={cells} />
+        {/* shade map: how much of the day's energy this panel loses to nearby buildings */}
+        {heat != null && !overflow && (
+          <mesh position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[panel.width - 0.04, panel.length - 0.04]} />
+            <meshBasicMaterial color={heatColor(heat)} transparent opacity={0.78} depthWrite={false} />
+          </mesh>
+        )}
       </group>
       {!elevated && !overflow && (
         <group position={[0, -(base + Math.sin(PANEL_TILT) * panel.length * 0.5), 0]}>
@@ -537,11 +554,11 @@ function RoofEditor({ layout, roof, roofTop, tool, selectedId, onPlace, onSelect
 }
 
 /* --------------------------------- scene --------------------------------- */
-function SceneContent({ plan, roof, site, lat, season, clock, onHour, crewCtl, onProgress, editor, captureRef }) {
+function SceneContent({ plan, roof, site, lat, season, clock, onHour, crewCtl, onProgress, editor, captureRef, shadeMap }) {
   const editing = Boolean(editor?.editing);
   const [dragging, setDragging] = useState(false);
   const controls = useRef();
-  const glow = useRef(0); const lit = useRef(0); const soc = useRef(50);
+  const glow = useRef(0); const lit = useRef(0); const soc = useRef(50); const shadeNow = useRef(null);
   const installedRef = useRef(0);
   const { layout, panel, chosen } = plan;
   const roofTop = houseHeight(site);
@@ -566,6 +583,7 @@ function SceneContent({ plan, roof, site, lat, season, clock, onHour, crewCtl, o
     glow.current = plan.solarKw[k] / peak;
     lit.current = plan.sim.blackout[k] ? 0 : alt < 2 ? 1.6 : 0.05;
     soc.current = plan.sim.soc[k];
+    shadeNow.current = plan.shading.panelHourly ? plan.shading.panelHourly[k] : null;
   });
 
   const targets = useMemo(() => Array.from({ length: chosen.panels }, (_, i) => {
@@ -600,7 +618,8 @@ function SceneContent({ plan, roof, site, lat, season, clock, onHour, crewCtl, o
 
       {!editing && targets.map((t, i) => (
         <Panel key={i} index={i} slot={t.slot} overflow={t.overflow} panel={panel} installedRef={installedRef}
-          glow={glow} structure={structure} roofTop={roofTop} seed={i * 7 + 3} />
+          glow={glow} structure={structure} roofTop={roofTop} seed={i * 7 + 3}
+          shadeRef={shadeNow} heat={shadeMap && plan.shading.panelHourly ? plan.shading.perPanel[i] ?? 0 : null} />
       ))}
       {!editing && (
       <InstallCrew

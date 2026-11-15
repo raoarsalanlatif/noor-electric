@@ -349,6 +349,8 @@ export function computePlan(input) {
       cost: Math.min(maxPanels, panelsWanted) * (panel.watts / 1000) * st.costPerKW,
     })),
     loadKw, running, solarKw, sim, shading,
+    // what the same array would make facing south with open sky (the reference for the performance meter)
+    solarKwOpen: shading.active ? shape.map((s) => s * systemKW) : solarKw,
     dailyKWh, peakW, requiredKW, panelsNeeded, areaNeeded,
     recommended: { inverterKW: recInverter, batteryKWh: recBattery, panels: panelsNeeded },
     chosen, installed, overflow, systemKW,
