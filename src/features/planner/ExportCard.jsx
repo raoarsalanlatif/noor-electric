@@ -42,7 +42,7 @@ const Offscreen = styled.div`position: fixed; left: -${PAGE_W + 200}px; top: 0; 
 
 const pad = (n) => String(n).padStart(2, '0');
 
-export default function ExportCard({ plan, roof, load, takeShot, disabled }) {
+export default function ExportCard({ plan, roof, load, takeShot, disabled, planInput }) {
   const [customer, setCustomer] = useState({ name: '', area: '' });
   const [lang, setLang] = useState('en');
   const [job, setJob] = useState(null); // { kind, shot, designNo, date }
@@ -101,7 +101,7 @@ export default function ExportCard({ plan, roof, load, takeShot, disabled }) {
     <Card>
       <CardTitle><FontAwesomeIcon icon={faFileArrowDown} /> &nbsp;Download your design <Ur>اپنا ڈیزائن ڈاؤن لوڈ کریں</Ur></CardTitle>
       <p style={{ margin: '0 0 12px', color: t.muted, fontSize: '0.88rem' }}>
-        A 3-page report with the 3D view, roof plan with dimensions, panels required, structure, your load and costs. The report is in English — pick Urdu or both if you prefer.
+        A full report: the 3D view, roof plan with dimensions, panels and structure, your load, shading from nearby buildings, month-by-month production, the 25-year outlook and the parts list. The report is in English — pick Urdu or both if you prefer.
       </p>
       <Grid>
         <div><Label htmlFor="ex-name">Your name (optional)</Label><TextInput id="ex-name" value={customer.name} onChange={(e) => setCustomer({ ...customer, name: e.target.value })} placeholder="e.g. Ahmed Khan" /></div>
@@ -125,7 +125,7 @@ export default function ExportCard({ plan, roof, load, takeShot, disabled }) {
       {msg.text && <Msg $err={msg.err}>{msg.text}</Msg>}
       {job && createPortal(
         <Offscreen aria-hidden="true">
-          <DesignReport ref={reportRef} plan={plan} roof={roof} load={load} customer={customer} shot={job.shot} designNo={job.designNo} date={job.date} lang={job.lang} logo={img('logo.png')} />
+          <DesignReport ref={reportRef} plan={plan} roof={roof} load={load} customer={customer} shot={job.shot} designNo={job.designNo} date={job.date} lang={job.lang} planInput={planInput} logo={img('logo.png')} />
         </Offscreen>,
         document.body,
       )}

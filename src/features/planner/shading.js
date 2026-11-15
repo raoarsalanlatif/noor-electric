@@ -16,6 +16,9 @@ const GAP = 0.5; // a neighbour can not stand closer than this to the house (met
 export const facingOf = (site) => (Number.isFinite(site?.facing) ? site.facing : 180);
 export const facingLabel = (deg) => (FACINGS.find((f) => f.deg === deg) || { label: `${Math.round(deg)}°` }).label;
 
+/** Height of the middle of a tilted panel above the ground (metres). */
+export const panelHeight = (site, layout, panel) => houseHeight(site) + layout.structure.frontH + Math.sin(TILT) * panel.length * 0.5;
+
 /** Surrounding buildings with safe sizes, pushed outside the house footprint. */
 export function surroundingBuildings(roof, site) {
   const hw = roof.width / 2 + GAP; const hl = roof.length / 2 + GAP;
@@ -87,7 +90,7 @@ export function computeShading({ roof, site, layout, panel, installed, lat, seas
   if (!turned && (!buildings.length || !slots.length)) return base;
 
   const weights = dailyShape(lat, season); // irradiance share of each hour
-  const yc = houseHeight(site) + layout.structure.frontH + Math.sin(TILT) * panel.length * 0.5;
+  const yc = panelHeight(site, layout, panel);
   const points = slots.map((s) => samplePoints(s, panel, yc));
   const normal = [0, Math.cos(TILT), Math.sin(TILT)]; // panels lean towards the front of the house
   const beam = CFG.shadeBeamShare;
