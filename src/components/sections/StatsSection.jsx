@@ -5,7 +5,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { brand } from '../../styles/variables';
 import { company } from '../../content/company';
-import { Section, Container, Eyebrow, Heading, Lead, Reveal } from '../ui/primitives';
+import { Section, Container, Eyebrow, Heading, Lead, Reveal, CountUp } from '../ui/primitives';
 
 const Layout = styled.div`
   display: grid;
@@ -20,9 +20,10 @@ const Stats = styled.div`
   grid-template-columns: repeat(3, 1fr);
   gap: 12px;
   margin-top: 32px;
-  div { background: ${brand.bgSoft}; border-radius: 18px; padding: 18px 16px; }
+  div { background: #fff; border: 1px solid ${brand.line}; border-radius: 18px; padding: 18px 16px; box-shadow: 0 10px 26px rgba(10,31,77,0.06); }
   b { display: block; font-family: 'Poppins', sans-serif; font-size: clamp(1.5rem, 3vw, 2rem); color: ${brand.blue}; line-height: 1.1; }
   span { font-size: 0.85rem; color: ${brand.muted}; }
+  b span { font-size: inherit; color: inherit; } /* the counting number */
   @media (max-width: 420px) { grid-template-columns: 1fr 1fr; }
 `;
 
@@ -41,6 +42,9 @@ const Benefit = styled.div`
   border-radius: 20px;
   border: 1px solid ${brand.line};
   background: #fff;
+  box-shadow: 0 1px 2px rgba(10,31,77,0.04);
+  transition: transform 0.25s, box-shadow 0.25s, border-color 0.25s;
+  &:hover { transform: translateY(-4px); box-shadow: 0 20px 40px rgba(10,31,77,0.1); border-color: ${brand.gold}88; }
   i { flex-shrink: 0; width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; font-style: normal;
     background: ${brand.gold}22; color: ${brand.orange}; font-size: 1.15rem; }
   h3 { font-size: 1.05rem; margin-bottom: 4px; }
@@ -66,9 +70,9 @@ function StatsSection() {
             <Heading>Stop being a tenant to the grid. <span>Own your energy.</span></Heading>
             <Lead>Pure savings, zero pollution and total peace of mind — with a local team in Peshawar that picks up the phone after installation.</Lead>
             <Stats>
-              <div><b>{company.projectsCompleted}</b><span>domestic &amp; commercial projects</span></div>
-              <div><b>{company.yearsInBusiness}</b><span>years in business</span></div>
-              <div><b>{company.facebookFollowers}</b><span>Facebook followers</span></div>
+              <div><b><CountUp value={company.projectsCompleted} /></b><span>domestic &amp; commercial projects</span></div>
+              <div><b><CountUp value={company.yearsInBusiness} /></b><span>years in business</span></div>
+              <div><b><CountUp value={company.facebookFollowers} /></b><span>Facebook followers</span></div>
             </Stats>
           </Reveal>
           <Benefits>

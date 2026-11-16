@@ -25,6 +25,7 @@ const Card = styled.article`
   padding: 30px 26px;
   position: relative;
   overflow: hidden;
+  box-shadow: 0 1px 2px rgba(10,31,77,0.04), 0 10px 28px rgba(10,31,77,0.05);
   transition: transform 0.25s, box-shadow 0.25s, border-color 0.25s;
   &::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 4px;
     background: linear-gradient(90deg, ${brand.gold}, ${brand.orange}); transform: scaleX(0); transform-origin: left; transition: transform 0.3s; }
@@ -32,7 +33,8 @@ const Card = styled.article`
   &:hover::after { transform: scaleX(1); }
   .ico { width: 58px; height: 58px; border-radius: 16px; display: grid; place-items: center; font-size: 1.4rem;
     background: linear-gradient(135deg, ${brand.blue}, ${brand.blueBright}); color: #fff; margin-bottom: 22px;
-    box-shadow: 0 12px 24px ${brand.blue}33; }
+    box-shadow: 0 12px 24px ${brand.blue}33; transition: transform 0.25s; }
+  &:hover .ico { transform: scale(1.08) rotate(-4deg); }
   h3 { font-size: 1.2rem; margin-bottom: 10px; }
   p { color: ${brand.muted}; font-size: 0.97rem; }
 `;
