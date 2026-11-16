@@ -1,4 +1,3 @@
-/* eslint-disable react/prop-types */
 import { useEffect, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import styled from 'styled-components';
@@ -119,68 +118,6 @@ const MobileCta = styled.div`
   @media (max-width: ${NAV_BP}) { display: flex; gap: 10px; margin-top: 10px; a { flex: 1; } }
 `;
 
-/* The home page uses a bare menu: the mark, the name and one "Menu" button over the artwork. */
-const HomeBar = styled.header`
-  position: fixed; inset: 0 0 auto 0; z-index: 1000; pointer-events: none;
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 0 clamp(18px, 3vw, 40px); height: 76px;
-  @media (max-width: 600px) { height: 68px; }
-  > * { pointer-events: auto; }
-  /* "difference" keeps the white name and button readable over both the black and the light sections */
-  mix-blend-mode: difference;
-  .brand { text-decoration: none; }
-  .name { font-family: ${fonts.heading}; font-weight: 600; font-size: 1.25rem; letter-spacing: -0.03em; color: #fff; }
-  .menu { border: 0; cursor: pointer; background: #fff; color: #000; border-radius: 999px; padding: 12px 26px; font-family: ${fonts.heading}; font-weight: 600; font-size: 1rem; }
-`;
-
-const Overlay = styled.div`
-  position: fixed; inset: 0; z-index: 1100; background: #0a0a0a; color: #fff; overflow-y: auto;
-  display: flex; flex-direction: column; justify-content: space-between;
-  padding: 0 clamp(18px, 3vw, 40px) clamp(24px, 4vw, 48px);
-  opacity: ${(p) => (p.$open ? 1 : 0)}; visibility: ${(p) => (p.$open ? 'visible' : 'hidden')};
-  transition: opacity 0.3s ease, visibility 0.3s;
-  .top { display: flex; align-items: center; justify-content: space-between; height: 76px; flex-shrink: 0; }
-  .top span { font-family: ${fonts.heading}; font-weight: 600; font-size: 1.25rem; letter-spacing: -0.03em; }
-  .top button { border: 0; cursor: pointer; background: #fff; color: #000; border-radius: 999px; padding: 12px 26px; font-family: ${fonts.heading}; font-weight: 600; font-size: 1rem; }
-  nav { display: grid; gap: 0; padding: 24px 0; }
-  nav a { font-family: ${fonts.heading}; font-weight: 600; letter-spacing: -0.045em; line-height: 1.06; font-size: clamp(2rem, min(5.6vw, 9.2vh), 4.8rem); color: #fff; text-decoration: none; width: fit-content; transition: color 0.2s; }
-  nav a:hover, nav a.active { color: #ff8a1f; }
-  .foot { display: flex; gap: 12px 32px; flex-wrap: wrap; font-size: 1rem; color: rgba(255,255,255,0.7); }
-  .foot a { color: #fff; text-decoration: none; }
-`;
-
-function HomeNav({ open, setOpen }) {
-  useEffect(() => {
-    if (!open) return undefined;
-    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
-    document.body.style.overflow = 'hidden';
-    window.addEventListener('keydown', onKey);
-    return () => { document.body.style.overflow = ''; window.removeEventListener('keydown', onKey); };
-  }, [open, setOpen]);
-  return (
-    <>
-      <HomeBar>
-        <Link className="brand" to="/" aria-label={`${company.name} home`}>
-          <span className="name">Noor Electric</span>
-        </Link>
-        <button type="button" className="menu" aria-expanded={open} onClick={() => setOpen(true)}>Menu</button>
-      </HomeBar>
-      <Overlay $open={open} role="dialog" aria-modal="true" aria-label="Menu" aria-hidden={!open}>
-        <div className="top"><span>Noor Electric</span><button type="button" onClick={() => setOpen(false)}>Close</button></div>
-        <nav aria-label="Main">
-          {[...NAV, { to: '/planner', label: 'Solar Planner' }, { to: '/play', label: 'Play Solar Rush' }].map((n) => (
-            <NavLink key={n.to} to={n.to} end={n.end} tabIndex={open ? 0 : -1} onClick={() => setOpen(false)}>{n.label}</NavLink>
-          ))}
-        </nav>
-        <div className="foot">
-          <a href={`tel:${company.phones[0].tel}`} tabIndex={open ? 0 : -1}>{company.phones[0].display}</a>
-          <span>{company.address.line1}, {company.address.line2}</span>
-        </div>
-      </Overlay>
-    </>
-  );
-}
-
 const NAV = [
   { to: '/', label: 'Home', end: true },
   { to: '/services', label: 'Services' },
@@ -202,8 +139,6 @@ function Navbar() {
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
-
-  if (pathname === '/') return <HomeNav open={open} setOpen={setOpen} />;
 
   return (
     <Bar $scrolled={scrolled || open}>
