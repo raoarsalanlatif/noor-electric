@@ -2,7 +2,7 @@ import styled from 'styled-components';
 import { brand, fonts } from '../../styles/variables';
 import { Section, Container, Eyebrow, Heading, Lead, SectionHead, Reveal } from '../ui/primitives';
 
-export const STEPS = [
+const STEPS = [
   { title: 'Free consultation', text: 'Tell us about your bill, load and goals on a call or WhatsApp.' },
   { title: 'Site survey', text: 'An engineer visits to check roof space, shading, structure and wiring.' },
   { title: 'Design & quote', text: 'You get a system design, equipment list and a clear, itemised price.' },
@@ -30,10 +30,7 @@ const Step = styled.div`
   text-align: center;
   .n { width: 56px; height: 56px; margin: 0 auto 16px; border-radius: 50%; display: grid; place-items: center;
     font-family: ${fonts.heading}; font-weight: 800; font-size: 1.2rem; color: ${brand.ink};
-    background: linear-gradient(145deg, #ffd25e, ${brand.gold} 55%, ${brand.orange});
-    box-shadow: 0 0 0 8px ${brand.bgSoft}, 0 14px 24px ${brand.gold}66, inset 0 2px 0 rgba(255,255,255,0.55), inset 0 -5px 10px rgba(180,90,0,0.25);
-    position: relative; transition: transform 0.25s; }
-  &:hover .n { transform: translateY(-5px) scale(1.08); }
+    background: ${brand.gold}; box-shadow: 0 0 0 8px ${brand.bgSoft}; position: relative; }
   h3 { font-size: 1.05rem; margin-bottom: 6px; }
   p { color: ${brand.muted}; font-size: 0.92rem; }
   @media (max-width: 960px) {
