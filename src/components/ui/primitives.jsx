@@ -1,5 +1,5 @@
 /* eslint-disable react/prop-types */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import styled, { css } from 'styled-components';
 import { Link } from 'react-router-dom';
 import { brand, fonts } from '../../styles/variables';
@@ -114,6 +114,40 @@ export function Reveal({ children, delay = 0, as }) {
     return () => io.disconnect();
   }, []);
   return <RevealBox ref={ref} as={as} $shown={shown} $delay={delay}>{children}</RevealBox>;
+}
+
+/**
+ * Counts a figure such as "500+" or "9.5K" up from zero the first time it scrolls into view.
+ * Shows the final figure straight away for visitors who ask for reduced motion.
+ */
+export function CountUp({ value, duration = 1400 }) {
+  const m = /^([\d.,]+)(.*)$/.exec(String(value));
+  const target = m ? parseFloat(m[1].replace(/,/g, '')) : NaN;
+  const decimals = m ? (m[1].split('.')[1] || '').length : 0;
+  const ref = useRef(null);
+  const [n, setN] = useState(target);
+  const animated = Number.isFinite(target) && typeof IntersectionObserver !== 'undefined'
+    && !(typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+  useLayoutEffect(() => { if (animated) setN(0); }, [animated]);
+  useEffect(() => {
+    if (!animated || !ref.current) return undefined;
+    let raf = 0;
+    const io = new IntersectionObserver(([e]) => {
+      if (!e.isIntersecting) return;
+      io.disconnect();
+      const t0 = performance.now();
+      const tick = (t) => {
+        const k = Math.min(1, (t - t0) / duration);
+        setN(target * (1 - (1 - k) ** 3)); // ease out
+        if (k < 1) raf = requestAnimationFrame(tick);
+      };
+      raf = requestAnimationFrame(tick);
+    }, { threshold: 0.4 });
+    io.observe(ref.current);
+    return () => { io.disconnect(); cancelAnimationFrame(raf); };
+  }, [animated, target, duration]);
+  if (!m) return value;
+  return <span ref={ref}>{n.toFixed(decimals)}{m[2]}</span>;
 }
 
 /** Subtle solar-cell grid used on dark backgrounds, echoing the brand creatives. */
