@@ -1,6 +1,6 @@
 import styled, { keyframes } from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faSolarPanel, faBolt, faShieldHalved, faArrowRight, faCircleCheck } from '@fortawesome/free-solid-svg-icons';
+import { faSolarPanel, faBolt, faArrowRight, faCircleCheck } from '@fortawesome/free-solid-svg-icons';
 import { faWhatsapp } from '@fortawesome/free-brands-svg-icons';
 import { brand, fonts } from '../../styles/variables';
 import { company, img, whatsappLink } from '../../content/company';
@@ -8,8 +8,9 @@ import { Container, ButtonLink, ButtonA, GridPattern } from '../ui/primitives';
 
 const float = keyframes`
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
+  50% { transform: translateY(-8px); }
 `;
+const rise = keyframes`from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; }`;
 
 const Hero = styled.section`
   position: relative;
@@ -36,10 +37,16 @@ const Swoosh = styled.svg`
 const Layout = styled.div`
   position: relative;
   display: grid;
-  grid-template-columns: 1.05fr 1fr;
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr);
   gap: clamp(32px, 5vw, 64px);
   align-items: center;
-  @media (max-width: 960px) { grid-template-columns: 1fr; }
+  /* the text and the photos arrive one after the other */
+  > div:first-child > * { animation: ${rise} 0.7s ease both; }
+  > div:first-child > *:nth-child(2) { animation-delay: 0.08s; }
+  > div:first-child > *:nth-child(3) { animation-delay: 0.16s; }
+  > div:first-child > *:nth-child(4) { animation-delay: 0.24s; }
+  > div:first-child > *:nth-child(5) { animation-delay: 0.32s; }
+  @media (max-width: 960px) { grid-template-columns: minmax(0, 1fr); }
 `;
 
 const Pill = styled.span`
@@ -58,9 +65,10 @@ const Pill = styled.span`
 
 const Title = styled.h1`
   color: #fff;
-  font-size: clamp(2.3rem, 5.4vw, 4rem);
+  font-size: clamp(2.2rem, 4.5vw, 3.45rem);
   font-weight: 800;
-  line-height: 1.06;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
   margin-bottom: 20px;
   span {
     background: linear-gradient(90deg, ${brand.gold}, #ffd25e 40%, ${brand.orange});
@@ -82,6 +90,8 @@ const Ctas = styled.div`
   flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 36px;
+  a svg { transition: transform 0.2s; }
+  a:hover svg.fa-arrow-right { transform: translateX(4px); }
   @media (max-width: 480px) { a { flex: 1 1 100%; } }
 `;
 
@@ -98,62 +108,62 @@ const Checks = styled.ul`
 
 const Visual = styled.div`
   position: relative;
-  min-height: 460px;
-  @media (max-width: 960px) { min-height: 0; margin-top: 8px; }
+  animation: ${rise} 0.8s 0.2s ease both;
+  @media (max-width: 960px) { margin-top: 8px; }
 `;
 
 const MainPhoto = styled.figure`
   position: relative;
-  border-radius: 28px;
+  border-radius: 24px;
   overflow: hidden;
-  border: 6px solid rgba(255,255,255,0.12);
-  box-shadow: 0 40px 80px rgba(0,0,0,0.35);
-  aspect-ratio: 16 / 11;
-  img { width: 100%; height: 100%; object-fit: cover; }
+  border: 1px solid rgba(255,255,255,0.16);
+  box-shadow: 0 34px 70px rgba(0,0,0,0.38);
+  aspect-ratio: 16 / 10;
+  img { width: 100%; height: 100%; object-fit: cover; transition: transform 1.4s cubic-bezier(0.2, 0.7, 0.2, 1); }
+  &:hover img { transform: scale(1.04); }
   figcaption {
     position: absolute; left: 0; right: 0; bottom: 0;
-    padding: 40px 20px 16px;
+    padding: 46px 20px 16px;
     background: linear-gradient(transparent, rgba(6,18,46,0.92));
     font-size: 0.9rem;
   }
   figcaption b { display: block; font-family: ${fonts.heading}; font-size: 1.05rem; }
 `;
 
+/* Three real photos from one installation: what goes on the roof and on the wall. */
+const Trio = styled.div`
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 12px;
+  figure { position: relative; margin: 0; border-radius: 16px; overflow: hidden; aspect-ratio: 4 / 3;
+    border: 1px solid rgba(255,255,255,0.16); box-shadow: 0 16px 34px rgba(0,0,0,0.28); }
+  img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 38%; transition: transform 0.8s cubic-bezier(0.2, 0.7, 0.2, 1); }
+  figure:hover img { transform: scale(1.06); }
+  figcaption { position: absolute; left: 0; right: 0; bottom: 0; padding: 22px 10px 8px; background: linear-gradient(transparent, rgba(6,18,46,0.9));
+    font-size: 0.74rem; color: rgba(255,255,255,0.85); line-height: 1.25; }
+  figcaption b { display: block; font-family: ${fonts.heading}; font-size: 0.86rem; color: #fff; }
+`;
+
 const FloatCard = styled.div`
   position: absolute;
+  z-index: 1;
   background: #fff;
   color: ${brand.ink};
-  border-radius: 18px;
-  padding: 14px 16px;
+  border-radius: 16px;
+  padding: 11px 16px 11px 12px;
   display: flex;
   align-items: center;
   gap: 12px;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.25);
-  animation: ${float} 5s ease-in-out infinite;
+  box-shadow: 0 18px 38px rgba(0,0,0,0.28);
+  animation: ${float} 6s ease-in-out infinite;
   animation-delay: ${(p) => p.$delay || '0s'};
-  i { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; font-style: normal;
-    background: ${(p) => p.$tint || brand.gold}; color: ${(p) => (p.$tint ? '#fff' : brand.ink)}; font-size: 1.1rem; }
-  b { display: block; font-family: ${fonts.heading}; font-size: 1.1rem; line-height: 1.1; }
-  small { color: ${brand.muted}; font-size: 0.78rem; }
+  i { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-style: normal;
+    background: ${(p) => p.$tint || brand.gold}; color: ${(p) => (p.$tint ? '#fff' : brand.ink)}; font-size: 1.05rem; }
+  b { display: block; font-family: ${fonts.heading}; font-size: 1.02rem; line-height: 1.15; }
+  small { color: ${brand.muted}; font-size: 0.76rem; }
   @media (max-width: 960px) { position: static; animation: none; flex: 1 1 200px; }
 `;
 
-const SmallPhoto = styled.img`
-  position: absolute;
-  width: 34%;
-  aspect-ratio: 3 / 4;
-  object-fit: cover;
-  border-radius: 20px;
-  border: 5px solid #fff;
-  box-shadow: 0 24px 48px rgba(0,0,0,0.35);
-  right: -18px;
-  top: -40px;
-  width: 30%;
-  @media (max-width: 960px) { display: none; }
-`;
-
 const MobileCards = styled.div`
-  @media (max-width: 960px) { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+  @media (max-width: 960px) { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
 `;
 
 function HeroSection() {
@@ -187,6 +197,7 @@ function HeroSection() {
               <li><FontAwesomeIcon icon={faCircleCheck} />Free site survey</li>
               <li><FontAwesomeIcon icon={faCircleCheck} />Tier-1 panels &amp; inverters</li>
               <li><FontAwesomeIcon icon={faCircleCheck} />Net-metering handled</li>
+              <li><FontAwesomeIcon icon={faCircleCheck} />Full warranty</li>
             </Checks>
           </div>
 
@@ -195,19 +206,19 @@ function HeroSection() {
               <img src={img('install-40kw.jpg')} alt="Hybrid inverters and lithium battery banks installed by Noor Electric" width="886" height="510" />
               <figcaption><b>40 kW premium hybrid upgrade</b>4 × Inverex hybrid inverters · 2 lithium battery banks</figcaption>
             </MainPhoto>
-            <SmallPhoto src={img('install-panels.jpg')} alt="Trina Solar bifacial panels on an elevated structure in Islamabad" loading="lazy" />
+            <Trio>
+              <figure><img src={img('install-panels.jpg')} alt="Trina Solar bifacial panels on an elevated structure in Islamabad" loading="lazy" width="285" height="385" /><figcaption><b>Panels</b>Trina Solar, 14 × 725 W</figcaption></figure>
+              <figure><img src={img('install-inverter.jpg')} alt="Solis 12 kW hybrid inverter installed on a wall" loading="lazy" width="284" height="385" /><figcaption><b>Inverter</b>Solis 12 kW hybrid</figcaption></figure>
+              <figure><img src={img('install-battery.jpg')} alt="Zilo lithium battery installed below the inverter" loading="lazy" width="285" height="385" /><figcaption><b>Battery</b>Zilo lithium, 16 kWh</figcaption></figure>
+            </Trio>
             <MobileCards>
-              <FloatCard style={{ top: -22, left: -26 }}>
+              <FloatCard style={{ top: -20, left: -14 }}>
                 <i><FontAwesomeIcon icon={faSolarPanel} /></i>
                 <div><b>{company.projectsCompleted} projects</b><small>Homes &amp; businesses</small></div>
               </FloatCard>
-              <FloatCard style={{ top: '46%', left: -40 }} $delay="1.2s" $tint={brand.blue}>
+              <FloatCard style={{ top: '38%', right: -14 }} $delay="1.4s" $tint={brand.blue}>
                 <i><FontAwesomeIcon icon={faBolt} /></i>
                 <div><b>24/7 backup</b><small>No more load-shedding</small></div>
-              </FloatCard>
-              <FloatCard style={{ bottom: -30, left: '22%' }} $delay="2.2s" $tint={brand.green}>
-                <i><FontAwesomeIcon icon={faShieldHalved} /></i>
-                <div><b>Full warranty</b><small>Expert installation</small></div>
               </FloatCard>
             </MobileCards>
           </Visual>
