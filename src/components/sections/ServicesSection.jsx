@@ -6,7 +6,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { brand, fonts } from '../../styles/variables';
 import { brands } from '../../content/company';
-import { Section, Container, Eyebrow, Heading, Lead, SectionHead, Grid, Reveal, Tilt, Glow } from '../ui/primitives';
+import { Section, Container, Eyebrow, Heading, Lead, SectionHead, Grid, Reveal } from '../ui/primitives';
 
 export const SERVICES = [
   { icon: faHouseChimney, title: 'Residential solar', text: 'On-grid and hybrid systems sized to your home’s real load, so you cut bills without overspending on panels you don’t need.' },
@@ -28,15 +28,11 @@ const Card = styled.article`
   transition: transform 0.25s, box-shadow 0.25s, border-color 0.25s;
   &::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 4px;
     background: linear-gradient(90deg, ${brand.gold}, ${brand.orange}); transform: scaleX(0); transform-origin: left; transition: transform 0.3s; }
-  box-shadow: 0 1px 0 #fff inset, 0 10px 30px rgba(10,31,77,0.05);
-  &:hover { box-shadow: 0 30px 60px rgba(10,31,77,0.16); border-color: transparent; }
+  &:hover { transform: translateY(-6px); box-shadow: 0 24px 48px rgba(10,31,77,0.1); border-color: transparent; }
   &:hover::after { transform: scaleX(1); }
   .ico { width: 58px; height: 58px; border-radius: 16px; display: grid; place-items: center; font-size: 1.4rem;
-    background: linear-gradient(145deg, ${brand.blueBright}, ${brand.blue} 55%, ${brand.navy}); color: #fff; margin-bottom: 22px;
-    /* a raised, glossy tile */
-    box-shadow: 0 14px 26px ${brand.blue}45, 0 3px 0 ${brand.navy}, inset 0 2px 0 rgba(255,255,255,0.35), inset 0 -6px 12px rgba(0,0,0,0.18);
-    transition: transform 0.25s; }
-  &:hover .ico { transform: translateY(-4px) scale(1.06) rotate(-4deg); }
+    background: linear-gradient(135deg, ${brand.blue}, ${brand.blueBright}); color: #fff; margin-bottom: 22px;
+    box-shadow: 0 12px 24px ${brand.blue}33; }
   h3 { font-size: 1.2rem; margin-bottom: 10px; }
   p { color: ${brand.muted}; font-size: 0.97rem; }
 `;
@@ -59,8 +55,7 @@ const BrandRow = styled.div`
 function ServicesSection({ tone = 'soft' }) {
   return (
     <Section id="services" $tone={tone}>
-      <Glow />
-      <Container style={{ position: 'relative' }}>
+      <Container>
         <SectionHead $center>
           <Eyebrow>What we do</Eyebrow>
           <Heading>End-to-end solar, <span>from survey to switch-on</span></Heading>
@@ -69,13 +64,11 @@ function ServicesSection({ tone = 'soft' }) {
         <Grid $cols={3}>
           {SERVICES.map((s, i) => (
             <Reveal key={s.title} delay={(i % 3) * 0.08}>
-              <Tilt>
-                <Card>
-                  <div className="ico"><FontAwesomeIcon icon={s.icon} /></div>
-                  <h3>{s.title}</h3>
-                  <p>{s.text}</p>
-                </Card>
-              </Tilt>
+              <Card>
+                <div className="ico"><FontAwesomeIcon icon={s.icon} /></div>
+                <h3>{s.title}</h3>
+                <p>{s.text}</p>
+              </Card>
             </Reveal>
           ))}
         </Grid>

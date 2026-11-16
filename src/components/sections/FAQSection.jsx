@@ -5,7 +5,7 @@ import { faPlus } from '@fortawesome/free-solid-svg-icons';
 import { brand, fonts } from '../../styles/variables';
 import { Section, Container, Eyebrow, Heading, Lead, SectionHead } from '../ui/primitives';
 
-export const FAQS = [
+const FAQS = [
   {
     q: 'What size solar system do I need?',
     a: 'It depends on what you run and for how long — mainly ACs, motors and geysers. Try our Solar Planner for an instant estimate, then we confirm the exact size during the free site survey.',
