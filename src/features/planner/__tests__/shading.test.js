@@ -56,8 +56,9 @@ describe('shading', () => {
 
   it('panels that lean north make less energy than south-facing ones', () => {
     const south = computePlan({ ...base, season: 'annual' });
-    const north = withSite({ facing: 0 }, { season: 'annual' });
-    const east = withSite({ facing: 90 }, { season: 'annual' });
+    // panelDir 0 keeps the panels leaning towards the front, whichever way the house faces
+    const north = withSite({ facing: 0, panelDir: 0 }, { season: 'annual' });
+    const east = withSite({ facing: 90, panelDir: 0 }, { season: 'annual' });
     expect(north.solarKWh).toBeLessThan(east.solarKWh);
     expect(east.solarKWh).toBeLessThan(south.solarKWh);
     expect(north.shading.orientPct).toBeLessThan(-5);
