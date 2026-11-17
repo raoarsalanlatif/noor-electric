@@ -3,13 +3,14 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faPlus, faInbox, faCalendarPlus, faTableColumns, faTrash } from '@fortawesome/free-solid-svg-icons';
+import { faPlus, faInbox, faCalendarPlus, faTableColumns, faTrash, faFileInvoiceDollar } from '@fortawesome/free-solid-svg-icons';
 import { faWhatsapp } from '@fortawesome/free-brands-svg-icons';
 import { patch, post, del } from '../../../lib/api';
 import { useLoad, useTeam } from '../hooks';
 import { a, Card, PageHead, Btn, Badge, Table, Empty, ErrorBox, Modal, Field, FormGrid, pkr, fmtDate, waLink, toLocalInput, Loading, LoadFailed } from '../ui';
 import { QUOTE_LABELS, QUOTE_TONES } from '../labels';
 import { EventForm } from './CalendarPage';
+import QuotationEditor from '../quotation/QuotationEditor';
 
 const Filters = styled.div`
   display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px;
@@ -28,6 +29,8 @@ function QuoteModal({ quote, onClose, onSaved }) {
   const [f, setF] = useState({ ...quote });
   const [err, setErr] = useState('');
   const [visit, setVisit] = useState(false);
+  const [builder, setBuilder] = useState(null); // the enquiry whose quotation document is being edited
+  const [changed, setChanged] = useState(false);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
 
   const save = async () => {
@@ -37,6 +40,11 @@ function QuoteModal({ quote, onClose, onSaved }) {
       else await patch(`quotes/${quote._id}`, { status: f.status, quotedAmount: f.quotedAmount, notes: f.notes, assignedTo: f.assignedTo || null, name: f.name, phone: f.phone, city: f.city, area: f.area, systemType: f.systemType });
       onSaved();
     } catch (e) { setErr(e.message); }
+  };
+  // a new enquiry is saved first, then its quotation document opens
+  const saveAndBuild = async () => {
+    setErr('');
+    try { const r = await post('quotes', f); setChanged(true); setBuilder(r.item); } catch (e) { setErr(e.message); }
   };
   const convert = async () => {
     try { await post(`quotes/${quote._id}/convert`); navigate('/admin/projects'); } catch (e) { setErr(e.message); }
@@ -57,6 +65,16 @@ function QuoteModal({ quote, onClose, onSaved }) {
     );
   }
 
+  if (builder) {
+    return (
+      <QuotationEditor
+        quote={builder}
+        onClose={() => { if (isNew || changed) onSaved(); else setBuilder(null); }}
+        onSaved={(q) => { setChanged(true); setBuilder(q); setF((x) => ({ ...x, quotation: q.quotation, quotedAmount: q.quotedAmount })); }}
+      />
+    );
+  }
+
   return (
     <Modal
       title={isNew ? 'New quotation' : `Quotation — ${quote.name}`}
@@ -69,7 +87,12 @@ function QuoteModal({ quote, onClose, onSaved }) {
             {!isNew && <Btn type="button" $v="ghost" onClick={() => setVisit(true)}><FontAwesomeIcon icon={faCalendarPlus} /> Book site visit</Btn>}
             {!isNew && <Btn type="button" $v="ghost" onClick={convert}><FontAwesomeIcon icon={faTableColumns} /> Add to project board</Btn>}
           </div>
-          <Btn type="button" onClick={save}>Save</Btn>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {isNew
+              ? <Btn type="button" $v="ghost" onClick={saveAndBuild}><FontAwesomeIcon icon={faFileInvoiceDollar} /> Save &amp; build quotation</Btn>
+              : <Btn type="button" $v="gold" onClick={() => setBuilder({ ...quote, ...f })}><FontAwesomeIcon icon={faFileInvoiceDollar} /> {f.quotation ? 'Edit quotation document' : 'Build quotation document'}</Btn>}
+            <Btn type="button" onClick={save}>Save</Btn>
+          </div>
         </>
       )}
     >
@@ -129,7 +152,7 @@ export default function Quotes() {
                     <td>{[q.area, q.city].filter(Boolean).join(', ') || '—'}</td>
                     <td>{q.plan?.systemKW ? `${q.plan.systemKW} kW design${q.plan.status ? ` (${q.plan.status})` : ''}` : q.systemType || (q.monthlyBill ? `Bill ${pkr(q.monthlyBill)}` : '—')}</td>
                     <td><Badge $tone={q.source === 'planner' ? 'teal' : q.source === 'manual' ? 'gray' : 'blue'}>{q.source}</Badge></td>
-                    <td>{pkr(q.quotedAmount)}</td>
+                    <td>{pkr(q.quotedAmount)}{q.quotation && <span title="Quotation document ready" style={{ color: a.blue, marginLeft: 6 }}><FontAwesomeIcon icon={faFileInvoiceDollar} /></span>}</td>
                     <td><Badge $tone={QUOTE_TONES[q.status]}>{QUOTE_LABELS[q.status]}</Badge></td>
                   </tr>
                 ))}
