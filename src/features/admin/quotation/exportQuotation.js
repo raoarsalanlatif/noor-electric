@@ -3,6 +3,9 @@ import { capturePages, saveBlob } from '../../planner/report/exportDesign';
 
 export { saveBlob };
 
+/** True when the browser can hand files to the share sheet (mostly phones). */
+export const canShareFiles = () => typeof navigator !== 'undefined' && Boolean(navigator.canShare);
+
 export const quotationFileName = (doc) => {
   const safe = (s) => String(s || '').trim().replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '');
   return `${['Noor-Electric-Quotation', safe(doc.refNo), safe(doc.proposedTo)].filter(Boolean).join('-')}.pdf`;

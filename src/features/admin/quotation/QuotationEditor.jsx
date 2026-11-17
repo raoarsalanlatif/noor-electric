@@ -2,10 +2,9 @@
 // Build the quotation document for an enquiry: edit on the left, live A4 preview on the right.
 // Starts from a template (built-in or saved by the team), saves onto the enquiry, exports to PDF.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import styled from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faPlus, faTrash, faArrowUp, faArrowDown, faFilePdf, faShareNodes, faFloppyDisk, faLayerGroup } from '@fortawesome/free-solid-svg-icons';
+import { faPlus, faTrash, faArrowUp, faArrowDown, faFloppyDisk, faLayerGroup } from '@fortawesome/free-solid-svg-icons';
 import { patch, post, del } from '../../../lib/api';
 import { img } from '../../../content/company';
 import { useLoad } from '../hooks';
@@ -14,7 +13,8 @@ import QuotationSheet from './QuotationSheet';
 import { PAGE_W } from './paginate';
 import { BUILT_IN_TEMPLATES } from './templates';
 import { UNITS, totals, lineAmount, fmtMoney, fromTemplate, toTemplate, emptyItem, emptySection, move, setAt, removeAt } from './model';
-import { quotationPdf, sharePdf, saveBlob } from './exportQuotation';
+import QuotationPdfButton from './QuotationPdfButton';
+import { canShareFiles } from './exportQuotation';
 
 const Layout = styled.div`
   *, *::before, *::after { box-sizing: border-box; }
@@ -33,7 +33,8 @@ const Pane = styled.div`
 `;
 const PreviewPane = styled(Pane)`
   position: sticky; top: 70px;
-  .frame { background: #e8ecf3; border: 1px solid ${a.line}; border-radius: 12px; padding: 12px; max-height: calc(100vh - 220px); overflow-y: auto; }
+  .bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 0.8rem; font-weight: 600; color: ${a.muted}; }
+  .frame { background: #e8ecf3; border: 1px solid ${a.line}; border-radius: 12px; padding: 12px; max-height: calc(100vh - 262px); overflow-y: auto; }
   .scaled { transform-origin: top left; }
   .scaled .report-page { box-shadow: 0 2px 10px rgba(16,24,40,0.12); }
   @media (max-width: 980px) { position: static; .frame { max-height: none; } }
@@ -76,7 +77,6 @@ const Sum = styled.div`
 `;
 const Check = styled.label`display: flex; align-items: center; gap: 8px; font-size: 0.86rem; color: ${a.text}; margin-top: 12px; cursor: pointer;`;
 const Hint = styled.p`margin: 6px 0 0; font-size: 0.8rem; color: ${(p) => (p.$err ? a.red : a.muted)};`;
-const Offscreen = styled.div`position: fixed; left: -${PAGE_W + 200}px; top: 0; width: ${PAGE_W}px; pointer-events: none; z-index: -1;`;
 
 /** Scale the full-size sheet down to the width of its container. */
 function ScaledSheet(props) {
@@ -114,9 +114,7 @@ export default function QuotationEditor({ quote, onClose, onSaved }) {
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
   const [dirty, setDirty] = useState(!quote.quotation);
-  const [job, setJob] = useState(null);
-  const exportRef = useRef(null);
-  const canShare = typeof navigator !== 'undefined' && Boolean(navigator.canShare);
+  const canShare = canShareFiles();
   const t = totals(doc);
   const assets = { logo: img('logo.png'), seal: img('quotation-seal.png') };
 
@@ -151,24 +149,9 @@ export default function QuotationEditor({ quote, onClose, onSaved }) {
     try { await patch(`quotes/${quote._id}`, { quotation: doc }); setDirty(false); setMsg('Quotation saved.'); onSaved?.({ ...quote, quotation: doc, quotedAmount: t.grandTotal }); } catch (e) { setErr(e.message); }
   };
 
-  // export: render the sheet at full size off-screen, capture it, then download or share
-  useEffect(() => {
-    if (!job) return undefined;
-    let cancelled = false;
-    (async () => {
-      try {
-        const file = await quotationPdf(exportRef.current, doc);
-        if (cancelled) return;
-        if (job === 'share' && await sharePdf(file, `Quotation from Noor Electric Renewables — ${doc.title}`)) setMsg('Shared.');
-        else { saveBlob(file, file.name); setMsg('PDF downloaded.'); }
-      } catch (e) { setErr(`Export failed: ${e.message || e}`); } finally { if (!cancelled) setJob(null); }
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [job]);
+  const pdf = { doc, onDone: setMsg, onError: setErr };
 
   const close = () => { if (!dirty || window.confirm('Close without saving your changes?')) onClose(); };
-  const busy = Boolean(job);
   const selected = templates.find((x) => x.id === tplId);
 
   return (
@@ -179,8 +162,8 @@ export default function QuotationEditor({ quote, onClose, onSaved }) {
       footer={(
         <>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <Btn type="button" $v="ghost" disabled={busy} onClick={() => setJob('pdf')}><FontAwesomeIcon icon={faFilePdf} /> {busy ? 'Preparing…' : 'Download PDF'}</Btn>
-            {canShare && <Btn type="button" $v="ghost" disabled={busy} onClick={() => setJob('share')}><FontAwesomeIcon icon={faShareNodes} /> Share</Btn>}
+            <QuotationPdfButton {...pdf} />
+            {canShare && <QuotationPdfButton {...pdf} share />}
           </div>
           <Btn type="button" onClick={save}><FontAwesomeIcon icon={faFloppyDisk} /> Save quotation</Btn>
         </>
@@ -266,10 +249,10 @@ export default function QuotationEditor({ quote, onClose, onSaved }) {
         </Pane>
 
         <PreviewPane $show={tab === 'preview'}>
+          <div className="bar"><span>Preview</span><QuotationPdfButton {...pdf} $sm $v="gold" /></div>
           <div className="frame"><ScaledSheet doc={doc} {...assets} /></div>
         </PreviewPane>
       </Layout>
-      {job && createPortal(<Offscreen aria-hidden="true"><QuotationSheet ref={exportRef} doc={doc} {...assets} /></Offscreen>, document.body)}
     </Modal>
   );
 }
