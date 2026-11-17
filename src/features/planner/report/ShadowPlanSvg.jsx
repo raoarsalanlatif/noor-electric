@@ -45,7 +45,7 @@ export default function ShadowPlanSvg({ plan, roof, hour, season = 'winter', wid
   const cx = width / 2; const cz = pad + (height - pad) / 2;
   const X = (x) => cx + x * s; const Y = (z) => cz + z * s;
   const panels = layout.slots.slice(0, installed);
-  const pw = layout.colW - 0.03; const pd = layout.depth;
+  const pw = layout.footX; const pd = layout.footZ;
   const byHour = hour != null;
   const sun = byHour ? sunFor(plan.city.lat, season, hour, shading.facing) : null;
   const y = panelHeight(site, layout, panel);

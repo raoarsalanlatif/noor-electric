@@ -161,6 +161,9 @@ export const FACING_UR = {
 export const MONTHS_UR = ['جنوری', 'فروری', 'مارچ', 'اپریل', 'مئی', 'جون', 'جولائی', 'اگست', 'ستمبر', 'اکتوبر', 'نومبر', 'دسمبر'];
 
 /** The basis of the design, filled with this design's own figures. `c` = planner settings, `p` = the plan. */
+// the side of the house the panels lean towards
+const SIDE_UR = { front: 'سامنے', right: 'دائیں', back: 'پیچھے', left: 'بائیں' };
+
 export const basisNotes = (c, p) => [
   [
     `Sun: ${p.city.sunHours} peak sun hours a day on average for ${p.city.name}; the sun follows its real path for the latitude and the time of year.`,
@@ -171,8 +174,8 @@ export const basisNotes = (c, p) => [
     'ماہ بہ ماہ دھوپ کے گھنٹے ایک ماڈل سے لیے گئے ہیں (دسمبر میں سب سے کم، جون میں سب سے زیادہ)، یہ ناپا ہوا موسمی ڈیٹا نہیں۔',
   ],
   [
-    `System losses: ${Math.round((1 - c.performanceRatio) * 100)}% for heat, dust, wiring and the inverter. Panels are tilted ${p.site?.tilt ?? 15}° towards the front of the house.`,
-    `سسٹم کے نقصانات: گرمی، گرد، وائرنگ اور انورٹر کی مد میں ${Math.round((1 - c.performanceRatio) * 100)}٪۔ پینلز ${p.site?.tilt ?? 15} ڈگری پر گھر کے سامنے کی طرف جھکے ہیں۔`,
+    `System losses: ${Math.round((1 - c.performanceRatio) * 100)}% for heat, dust, wiring and the inverter. Panels are tilted ${p.site?.tilt ?? 15}° towards the ${p.layout.side} of the house.`,
+    `سسٹم کے نقصانات: گرمی، گرد، وائرنگ اور انورٹر کی مد میں ${Math.round((1 - c.performanceRatio) * 100)}٪۔ پینلز ${p.site?.tilt ?? 15} ڈگری پر گھر کے ${SIDE_UR[p.layout.side] || 'سامنے'} کی طرف جھکے ہیں۔`,
   ],
   [
     `Shade: sun rays are traced to 18 points on every panel, four times an hour. A panel in shadow is taken to lose ${Math.round(c.shadeBeamShare * 100)}% of its output. Nearby buildings entered, things on the roof and the panel row in front are counted; trees, poles and future construction are not.`,
