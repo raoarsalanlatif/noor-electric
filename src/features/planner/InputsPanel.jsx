@@ -4,8 +4,7 @@ import styled from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faMinus, faPlus, faPlug, faRulerCombined, faSolarPanel, faLocationCrosshairs, faPenRuler, faXmark, faCheck } from '@fortawesome/free-solid-svg-icons';
 import { APPLIANCES } from './appliances';
-import { CITIES, PANEL_OPTIONS, INVERTER_SIZES, nearestCity, ROOF_ITEMS, FACINGS, SURROUNDING, TILT_OPTIONS, ROW_SPACING } from './config';
-import { tiltDeg } from '../three/dims';
+import { CITIES, PANEL_OPTIONS, INVERTER_SIZES, nearestCity, ROOF_ITEMS, FACINGS, SURROUNDING } from './config';
 import { ITEM_ICONS } from './RoofEditorUI';
 import { SEASONS } from '../three/sun';
 import { Card, Label, Range, NumberInput, Select, Segmented, Seg, Toggle, Row, t } from './ui';
@@ -89,6 +88,11 @@ const Hint = styled.p`
   font-size: 0.78rem;
   color: ${t.muted};
   margin: 6px 0 0;
+`;
+
+const LinkBtn = styled.button`
+  border: 0; background: none; padding: 0; margin-top: 6px; cursor: pointer;
+  color: ${t.orange}; font-size: 0.78rem; text-decoration: underline; text-align: left;
 `;
 
 const Demo = styled.button`
@@ -244,6 +248,7 @@ const GpsButton = styled.button`
 
 function SiteTab({ location, setLocation, season, setSeason, site, setSite, roof, setRoof, panelWatts, setPanelWatts, plan, onEditRoof, onAddItem, onRemoveItem }) {
   const [gps, setGps] = useState('');
+  const [advanced, setAdvanced] = useState(false);
   const dim = (key, label) => (
     <Field>
       <Row $justify="space-between"><Label>{label}</Label>
@@ -338,35 +343,27 @@ function SiteTab({ location, setLocation, season, setSeason, site, setSite, roof
           {!FACINGS.some((f) => f.deg === plan.shading.facing) && <option value={plan.shading.facing}>{Math.round(plan.shading.facing)}° (exact bearing)</option>}
           {FACINGS.map((f) => <option key={f.deg} value={f.deg}>{f.label}{f.deg === 180 ? ' (best for solar)' : ''}</option>)}
         </Select>
-        <Row $justify="space-between" style={{ marginTop: 8 }}>
-          <Label htmlFor="pl-bearing" style={{ margin: 0 }}>Exact compass bearing</Label>
-          <Row $gap="4px">
-            <NumberInput id="pl-bearing" min={0} max={359} step={1} value={Math.round(plan.shading.facing)}
-              onChange={(e) => { const v = Number(e.target.value); if (Number.isFinite(v)) set({ facing: ((Math.round(v) % 360) + 360) % 360 }); }} />
-            <span style={{ color: t.muted }}>°</span>
-          </Row>
-        </Row>
-        <Hint>Panels lean towards the front of the house. Stand at the front facing the street and read the bearing from your phone compass (180° is due south). The sun and shadows in the 3D view follow this direction.</Hint>
-      </Field>
-
-      <SubHead>Panel tilt and rows</SubHead>
-      <Field>
-        <Label>Panel tilt</Label>
-        <Segmented>
-          {TILT_OPTIONS.map((d) => <Seg key={d} type="button" $active={tiltDeg(site) === d} onClick={() => set({ tilt: d })}>{d}°</Seg>)}
-        </Segmented>
-        <Hint>A steeper tilt makes more in winter and less in summer, and needs more room between rows.</Hint>
-      </Field>
-      <Field>
-        <Label>Row spacing</Label>
-        <Segmented>
-          {ROW_SPACING.map(([k, l]) => <Seg key={k} type="button" $active={(site.rowSpacing || 'compact') === k} onClick={() => set({ rowSpacing: k })}>{l}</Seg>)}
-        </Segmented>
-        <Hint>
-          {plan.layout.winterSafe
-            ? `Rows are ${plan.layout.rowGap.toFixed(2)} m apart, so none shades the next between 10 am and 2 pm on 21 December.`
-            : `Rows are ${plan.layout.rowGap.toFixed(2)} m apart to fit the most panels. Shade between rows is counted${plan.shading.sources.rows >= 0.5 ? ` (about ${Math.round(plan.shading.sources.rows)}% now)` : ''}.`}
-        </Hint>
+        <Hint>Panels lean towards the front of the house. The sun and shadows in the 3D view follow this direction.</Hint>
+        <LinkBtn type="button" aria-expanded={advanced} onClick={() => setAdvanced((v) => !v)}>{advanced ? 'Hide advanced' : 'Advanced: enter an exact compass bearing'}</LinkBtn>
+        {advanced && (
+          <>
+            <Row $justify="space-between" style={{ marginTop: 8 }}>
+              <Label htmlFor="pl-bearing" style={{ margin: 0 }}>Compass bearing of the front</Label>
+              <Row $gap="4px">
+                <NumberInput id="pl-bearing" min={0} max={359} step={1} value={Math.round(plan.shading.facing)}
+                  onChange={(e) => { const v = Number(e.target.value); if (Number.isFinite(v)) set({ facing: ((Math.round(v) % 360) + 360) % 360 }); }} />
+                <span style={{ color: t.muted }}>°</span>
+              </Row>
+            </Row>
+            <Hint>Stand at the front facing the street and read the bearing from your phone compass. 180° is due south.</Hint>
+          </>
+        )}
+        {plan.layout.winterSafe && (
+          <Hint>
+            Winter-safe row spacing is on: rows are {plan.layout.rowGap.toFixed(2)} m apart so they do not shade each other in December.{' '}
+            <LinkBtn type="button" style={{ marginTop: 0 }} onClick={() => set({ rowSpacing: 'compact' })}>Fit the most panels instead</LinkBtn>
+          </Hint>
+        )}
       </Field>
       <Hint style={{ marginBottom: 8 }}>Add the buildings next to your house, with their real height, to see whether their shadow reaches your panels.</Hint>
       {plan.shading.buildings.length > 0 && (
