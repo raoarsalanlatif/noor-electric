@@ -115,16 +115,6 @@ export const FACINGS = [
 /** A building next to the house, placed in the 3D editor. Sizes in metres; h is its height above the ground. */
 export const SURROUNDING = { label: 'Nearby building', short: 'Building', w: 9, d: 10, h: 9.5 };
 
-/** Panel tilt choices, degrees above horizontal. */
-export const TILT_OPTIONS = [10, 15, 20, 25, 30];
-
-/**
- * Row spacing. 'compact' keeps a walkway between rows and fits the most panels (rows shade each other a
- * little in winter, and that loss is counted). 'winter' opens the rows so none shades the next between
- * 10 am and 2 pm on 21 December.
- */
-export const ROW_SPACING = [['compact', 'Most panels'], ['winter', 'Winter-safe']];
-
 export const DEFAULT_SITE = {
   storeys: 2,
   parapetH: 0.9, // metres
@@ -132,6 +122,8 @@ export const DEFAULT_SITE = {
   items: defaultRoofItems({ width: 10, length: 14 }),
   facing: 180, // the front of the house faces south
   surroundings: [], // nearby buildings that may shade the roof
-  tilt: 15, // panel tilt, degrees above horizontal
-  rowSpacing: 'compact', // 'compact' | 'winter'
+  tilt: 15, // panel tilt in degrees, set by the L2 / L3 frames; not a customer choice
+  // 'compact' keeps a walkway between rows and fits the most panels (shade between rows is counted).
+  // 'winter' opens the rows so none shades the next between 10 am and 2 pm on 21 December; offered as a fix.
+  rowSpacing: 'compact',
 };
