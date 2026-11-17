@@ -1,6 +1,7 @@
 import { getDb, oid } from './db.js';
 import { contentRoutes } from './content.js';
 import { financeRoutes } from './finance.js';
+import { quotationRoutes, cleanQuotation, quotationTotals } from './quotation.js';
 import { requireUser, issueSession, clearSession, hashPassword, checkPassword, publicUser } from './auth.js';
 import {
   HttpError, bad, notFound, readBody, clientIp, rateLimit, str, num, bool, oneOf, date, strList,
@@ -480,9 +481,14 @@ async function updateQuote(req, id) {
   if (b.notes !== undefined) set.notes = str(b.notes, 3000);
   if (b.assignedTo !== undefined) set.assignedTo = /^[a-f0-9]{24}$/i.test(b.assignedTo || '') ? b.assignedTo : null;
   ['name', 'phone', 'email', 'city', 'area', 'systemType', 'message'].forEach((k) => { if (b[k] !== undefined) set[k] = quoteFields(b)[k]; });
+  // the quotation document built in the admin panel; its grand total becomes the quoted amount
+  if (b.quotation !== undefined) {
+    set.quotation = b.quotation ? cleanQuotation(b.quotation) : null;
+    if (set.quotation) set.quotedAmount = quotationTotals(set.quotation).grandTotal;
+  }
   const db = await getDb();
   await db.collection('quotes').updateOne({ _id: oid(id) }, { $set: { ...set, updatedAt: now() } });
-  return { ok: true };
+  return { ok: true, ...(set.quotation ? { quotedAmount: set.quotedAmount } : {}) };
 }
 
 async function deleteQuote(req, id) {
@@ -606,5 +612,6 @@ export const routes = [
   R('GET', 'public/blogs/:id', (req, res, slug) => publicBlog(slug)),
 
   ...contentRoutes,
+  ...quotationRoutes,
   ...financeRoutes,
 ];
