@@ -5,8 +5,8 @@ import { OrbitControls, ContactShadows, Edges, PerformanceMonitor } from '@react
 import * as THREE from 'three';
 import { SkySystem, Neighbourhood } from '../three/Environment';
 import HouseModel from '../three/HouseModel';
-import { houseHeight } from '../three/dims';
-import SolarPanelModel, { PanelLegs, PANEL_TILT } from '../three/SolarPanelModel';
+import { houseHeight, tiltRad } from '../three/dims';
+import SolarPanelModel, { PanelLegs } from '../three/SolarPanelModel';
 import Worker from '../three/Worker';
 import { sunPosition } from '../three/sun';
 import { plasterTexture } from '../three/textures';
@@ -55,15 +55,15 @@ function heatColor(loss) {
   return c;
 }
 
-function Panel({ index, slot, overflow, panel, installedRef, glow, structure, roofTop, seed, shadeRef, heat, realistic }) {
+function Panel({ index, slot, overflow, panel, installedRef, glow, structure, roofTop, seed, shadeRef, heat, realistic, tilt }) {
   const g = useRef();
   const cells = useRef();
   const st = useRef({ phase: 'hidden', vy: 0, t: 0 });
   const elevated = structure.key === 'elevated';
   const base = structure.frontH;
   const target = useMemo(
-    () => [slot.x, roofTop + base + Math.sin(PANEL_TILT) * panel.length * 0.5, slot.z],
-    [slot.x, slot.z, roofTop, base, panel.length],
+    () => [slot.x, roofTop + base + Math.sin(tilt) * panel.length * 0.5, slot.z],
+    [slot.x, slot.z, roofTop, base, panel.length, tilt],
   );
 
   useFrame((_, dt) => {
@@ -99,7 +99,7 @@ function Panel({ index, slot, overflow, panel, installedRef, glow, structure, ro
 
   return (
     <group ref={g} visible={false}>
-      <group rotation={[PANEL_TILT, 0, 0]}>
+      <group rotation={[tilt, 0, 0]}>
         <SolarPanelModel panel={panel} cellsRef={cells} realistic={realistic} />
         {/* shade map: how much of the day's energy this panel loses to nearby buildings */}
         {heat != null && !overflow && (
@@ -110,8 +110,8 @@ function Panel({ index, slot, overflow, panel, installedRef, glow, structure, ro
         )}
       </group>
       {!elevated && !overflow && (
-        <group position={[0, -(base + Math.sin(PANEL_TILT) * panel.length * 0.5), 0]}>
-          <PanelLegs panel={panel} base={base} />
+        <group position={[0, -(base + Math.sin(tilt) * panel.length * 0.5), 0]}>
+          <PanelLegs panel={panel} base={base} tilt={tilt} />
         </group>
       )}
     </group>
@@ -156,7 +156,7 @@ function ElevatedFrame({ layout, roofTop, panel }) {
 }
 
 /* ------------------------------ install crew ------------------------------ */
-function InstallCrew({ targets, panel, roof, roofTop, parapetH, installedRef, ctl, onProgress, depth, realistic }) {
+function InstallCrew({ targets, panel, roof, roofTop, parapetH, installedRef, ctl, onProgress, depth, realistic, tilt }) {
   const roofW = useRef(); const groundW = useRef();
   const roofAnim = useRef({ mode: 'idle', moving: false, speed: 1 });
   const groundAnim = useRef({ mode: 'idle', moving: false, speed: 1 });
@@ -247,7 +247,7 @@ function InstallCrew({ targets, panel, roof, roofTop, parapetH, installedRef, ct
           THREE.MathUtils.lerp(roofTop + 1.6, t.pos[1], k),
           THREE.MathUtils.lerp(pos.z - 0.4, t.pos[2], k),
         );
-        cp.rotation.set(PANEL_TILT * k, 0, 0);
+        cp.rotation.set(tilt * k, 0, 0);
         if (s.t >= 1) {
           installedRef.current = s.idx + 1;
           s.phase = t.overflow ? 'oops' : 'return'; s.t = 0; s.idx += 1;
@@ -598,6 +598,7 @@ function SceneContent({ plan, roof, site, lat, season, clock, onHour, crewCtl, o
   const { structure } = plan;
   const elevated = structure.key === 'elevated';
   const base = structure.frontH;
+  const tilt = tiltRad(site);
   const { facing, buildings } = plan.shading;
   // direction of south on the roof (x, z), for the editor's sun-side marker
   const south = useMemo(() => { const a = ((360 - facing) * Math.PI) / 180; return [Math.sin(a), -Math.cos(a)]; }, [facing]);
@@ -620,8 +621,8 @@ function SceneContent({ plan, roof, site, lat, season, clock, onHour, crewCtl, o
   const targets = useMemo(() => Array.from({ length: chosen.panels }, (_, i) => {
     const overflow = i >= layout.maxPanels;
     const slot = overflow ? layout.overflowSlot(i - layout.maxPanels) : layout.slots[i];
-    return { slot, overflow, pos: [slot.x, roofTop + base + Math.sin(PANEL_TILT) * panel.length * 0.5, slot.z] };
-  }), [chosen.panels, layout, roofTop, base, panel.length]);
+    return { slot, overflow, pos: [slot.x, roofTop + base + Math.sin(tilt) * panel.length * 0.5, slot.z] };
+  }), [chosen.panels, layout, roofTop, base, panel.length, tilt]);
 
   return (
     <>
@@ -651,13 +652,13 @@ function SceneContent({ plan, roof, site, lat, season, clock, onHour, crewCtl, o
 
       {!editing && targets.map((t, i) => (
         <Panel key={i} index={i} slot={t.slot} overflow={t.overflow} panel={panel} installedRef={installedRef}
-          glow={glow} structure={structure} roofTop={roofTop} seed={i * 7 + 3} realistic={rich}
+          glow={glow} structure={structure} roofTop={roofTop} seed={i * 7 + 3} realistic={rich} tilt={tilt}
           shadeRef={shadeNow} heat={shadeMap && plan.shading.panelHourly ? plan.shading.perPanel[i] ?? 0 : null} />
       ))}
       {!editing && (
       <InstallCrew
         targets={targets} panel={panel} roof={roof} roofTop={roofTop} parapetH={site.parapetH}
-        installedRef={installedRef} ctl={crewCtl} onProgress={report} depth={layout.depth} realistic={rich}
+        installedRef={installedRef} ctl={crewCtl} onProgress={report} depth={layout.depth} realistic={rich} tilt={tilt}
       />
       )}
     </>

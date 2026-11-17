@@ -9,6 +9,7 @@ import Analytics from './Analytics';
 import BookingCard from './BookingCard';
 import ExportCard from './ExportCard';
 import PerformanceMeter from './PerformanceMeter';
+import SunAccessCard from './SunAccessCard';
 import { computePlan } from './sizing';
 import { DEFAULT_LOAD } from './appliances';
 import { CITIES, DEFAULT_SITE, ROOF_ITEMS, SURROUNDING } from './config';
@@ -325,6 +326,7 @@ export default function SolarPlanner() {
     if (action.inverterKW) setCustom((c) => ({ ...c, inverterKW: action.inverterKW }));
     if (action.batteryKWh) { setWithBattery(true); setCustom((c) => ({ ...c, batteryKWh: action.batteryKWh })); }
     if (action.structure) setSite((st) => ({ ...st, structure: action.structure }));
+    if (action.rowSpacing) setSite((st) => ({ ...st, rowSpacing: action.rowSpacing }));
   };
 
   const k = hour % 24;
@@ -443,6 +445,7 @@ export default function SolarPlanner() {
           )}
 
           <Analytics plan={plan} hour={k} />
+          <SunAccessCard plan={plan} planInput={planInput} />
           <ExportCard plan={plan} roof={roof} load={load} takeShot={takeShot} disabled={editing} planInput={planInput} />
           <BookingCard plan={plan} />
           <p style={{ color: t.muted, fontSize: '0.78rem', margin: 0 }}>

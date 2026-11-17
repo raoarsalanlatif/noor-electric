@@ -43,7 +43,8 @@ export default function PerformanceMeter({ plan, hour, shadeMap, onShadeMap }) {
   const { shading } = plan;
   const sunOn = 1 - (shading.shade[hour] || 0);
   const tone = night ? t.muted : pct >= 0.6 ? t.green : pct >= 0.3 ? t.amber : t.red;
-  const hasBuildings = shading.buildings.length > 0;
+  // shade can come from nearby buildings, things on the roof or the panel row in front
+  const hasBuildings = shading.buildings.length > 0 || shading.lossPct >= 0.5;
   return (
     <Box role="group" aria-label="Performance meter">
       <div className="ttl">Performance now</div>

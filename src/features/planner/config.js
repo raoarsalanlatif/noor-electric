@@ -18,7 +18,9 @@ export const PLANNER_CONFIG = {
   batteryUsable: 0.9, // usable depth of discharge
   inverterSafetyFactor: 1.25,
   roofSetback: 0.6, // metres kept free along every roof edge
-  rowPitch: 2.8, // metres between tilted panel rows (avoids shading)
+  rowGap: 0.6, // metres of walkway between tilted panel rows in the compact layout
+  // Largest array (kW of panels) one kW of inverter should carry. Above this the inverter clips and its PV input limit is at risk.
+  dcAcRatioMax: 1.3,
   panelGap: 0.03,
   // How far a rooftop object's shadow reaches, as a multiple of how much it stands above the panels.
   // Sun is in the south, so the long shadow falls to the north (behind the object).
@@ -113,6 +115,16 @@ export const FACINGS = [
 /** A building next to the house, placed in the 3D editor. Sizes in metres; h is its height above the ground. */
 export const SURROUNDING = { label: 'Nearby building', short: 'Building', w: 9, d: 10, h: 9.5 };
 
+/** Panel tilt choices, degrees above horizontal. */
+export const TILT_OPTIONS = [10, 15, 20, 25, 30];
+
+/**
+ * Row spacing. 'compact' keeps a walkway between rows and fits the most panels (rows shade each other a
+ * little in winter, and that loss is counted). 'winter' opens the rows so none shades the next between
+ * 10 am and 2 pm on 21 December.
+ */
+export const ROW_SPACING = [['compact', 'Most panels'], ['winter', 'Winter-safe']];
+
 export const DEFAULT_SITE = {
   storeys: 2,
   parapetH: 0.9, // metres
@@ -120,4 +132,6 @@ export const DEFAULT_SITE = {
   items: defaultRoofItems({ width: 10, length: 14 }),
   facing: 180, // the front of the house faces south
   surroundings: [], // nearby buildings that may shade the roof
+  tilt: 15, // panel tilt, degrees above horizontal
+  rowSpacing: 'compact', // 'compact' | 'winter'
 };
