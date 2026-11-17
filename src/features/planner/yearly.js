@@ -5,7 +5,7 @@
 
 import { computePlan } from './sizing';
 import { PLANNER_CONFIG as CFG } from './config';
-import { orientationFactor, facingOf } from './shading';
+import { orientationFactor } from './shading';
 import { tiltDeg } from '../three/dims';
 import { dailyShape } from '../three/sun';
 
@@ -75,7 +75,7 @@ export function yearlyOutlook(input, plan) {
     if (f > bestFactor) { bestFactor = f; bestTilt = tilt; }
   }
   year.bestTilt = bestTilt;
-  year.tofPct = bestFactor > 0 ? Math.min(100, (yearFactor(tiltDeg(plan.site), facingOf(plan.site)) / bestFactor) * 100) : 100;
+  year.tofPct = bestFactor > 0 ? Math.min(100, (yearFactor(tiltDeg(plan.site), plan.shading.bearing) / bestFactor) * 100) : 100;
   year.tsrfPct = (year.sunAccessPct * year.tofPct) / 100;
   year.clippedKWh = sum('clippedKWh');
 

@@ -128,7 +128,7 @@ describe('yearly solar access and TSRF', () => {
   });
 
   it('panels facing north score a lower TSRF', () => {
-    const input = { ...base, site: { ...DEFAULT_SITE, facing: 0 } };
+    const input = { ...base, site: { ...DEFAULT_SITE, facing: 0, panelDir: 0 } };
     const north = yearlyOutlook(input, computePlan(input));
     expect(north.year.tsrfPct).toBeLessThan(y.year.tsrfPct);
   });

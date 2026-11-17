@@ -6,6 +6,7 @@ import { faMinus, faPlus, faPlug, faRulerCombined, faSolarPanel, faLocationCross
 import { APPLIANCES } from './appliances';
 import { CITIES, PANEL_OPTIONS, INVERTER_SIZES, nearestCity, ROOF_ITEMS, FACINGS, SURROUNDING } from './config';
 import { ITEM_ICONS } from './RoofEditorUI';
+import { compassName } from './frame';
 import { SEASONS } from '../three/sun';
 import { Card, Label, Range, NumberInput, Select, Segmented, Seg, Toggle, Row, t } from './ui';
 
@@ -88,6 +89,12 @@ const Hint = styled.p`
   font-size: 0.78rem;
   color: ${t.muted};
   margin: 6px 0 0;
+`;
+
+const PickLine = styled.label`
+  display: flex; align-items: center; gap: 8px; margin: 8px 0 0; font-size: 0.84rem; color: ${t.text}; cursor: pointer;
+  input { accent-color: ${t.orange}; }
+  small { margin-left: auto; color: ${t.muted}; }
 `;
 
 const LinkBtn = styled.button`
@@ -246,7 +253,7 @@ const GpsButton = styled.button`
   &:hover { border-color: ${t.orange}; }
 `;
 
-function SiteTab({ location, setLocation, season, setSeason, site, setSite, roof, setRoof, panelWatts, setPanelWatts, plan, onEditRoof, onAddItem, onRemoveItem }) {
+function SiteTab({ location, setLocation, season, setSeason, site, setSite, roof, setRoof, panelWatts, setPanelWatts, plan, onEditRoof, onAddItem, onRemoveItem, onRoomPanels }) {
   const [gps, setGps] = useState('');
   const [advanced, setAdvanced] = useState(false);
   const dim = (key, label) => (
@@ -321,7 +328,7 @@ function SiteTab({ location, setLocation, season, setSeason, site, setSite, roof
             return (
               <li key={o.id}>
                 <FontAwesomeIcon icon={ITEM_ICONS[o.type] || ITEM_ICONS.other} />
-                <span>{def.label}{o.onTop ? ' (on the room)' : ''}</span>
+                <span>{def.label}{o.onTop ? ' (on the room)' : ''}{o.panelsOnTop ? ' · panels on top' : ''}</span>
                 <small>{o.type === 'tank' ? `Ø${o.w.toFixed(1)}` : `${o.w.toFixed(1)}×${o.d.toFixed(1)}`} × {o.h.toFixed(1)} m</small>
                 <button type="button" aria-label={`Remove ${def.label}`} onClick={() => onRemoveItem(o.id)}><FontAwesomeIcon icon={faXmark} /></button>
               </li>
@@ -334,6 +341,13 @@ function SiteTab({ location, setLocation, season, setSeason, site, setSite, roof
           <button key={key} type="button" onClick={() => onAddItem(key)}><FontAwesomeIcon icon={faPlus} /> {it.short}</button>
         ))}
       </QuickAdd>
+      {plan.layout.obstacles.filter((o) => o.type === 'room').map((o, i, rooms) => (
+        <PickLine key={o.id}>
+          <input type="checkbox" checked={Boolean(o.panelsOnTop)} onChange={(e) => onRoomPanels(o.id, e.target.checked)} />
+          Put panels on top of {rooms.length > 1 ? `room ${i + 1}` : 'the room'}
+          {o.panelsOnTop && <small>{plan.layout.slots.filter((s) => s.onRoom === o.id).length} fit</small>}
+        </PickLine>
+      ))}
       <EditRoof type="button" onClick={onEditRoof}><FontAwesomeIcon icon={faPenRuler} /> Arrange my roof in 3D</EditRoof>
 
       <SubHead>Around your house</SubHead>
@@ -343,7 +357,12 @@ function SiteTab({ location, setLocation, season, setSeason, site, setSite, roof
           {!FACINGS.some((f) => f.deg === plan.shading.facing) && <option value={plan.shading.facing}>{Math.round(plan.shading.facing)}° (exact bearing)</option>}
           {FACINGS.map((f) => <option key={f.deg} value={f.deg}>{f.label}{f.deg === 180 ? ' (best for solar)' : ''}</option>)}
         </Select>
-        <Hint>Panels lean towards the front of the house. The sun and shadows in the 3D view follow this direction.</Hint>
+        <Hint>
+          Panels lean towards the <b style={{ color: t.text }}>{plan.layout.side}</b> of the house ({compassName(plan.layout.bearing)})
+          {plan.panelDirAuto ? ', the side with the most sun.' : '.'}{' '}
+          <LinkBtn type="button" style={{ marginTop: 0 }} onClick={() => set({ panelDir: (plan.layout.turn + 1) % 4 })}>Turn panels</LinkBtn>
+          {!plan.panelDirAuto && <>{' · '}<LinkBtn type="button" style={{ marginTop: 0 }} onClick={() => set({ panelDir: 'auto' })}>Back to best side</LinkBtn></>}
+        </Hint>
         <LinkBtn type="button" aria-expanded={advanced} onClick={() => setAdvanced((v) => !v)}>{advanced ? 'Hide advanced' : 'Advanced: enter an exact compass bearing'}</LinkBtn>
         {advanced && (
           <>

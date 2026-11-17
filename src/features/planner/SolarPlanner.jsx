@@ -327,6 +327,7 @@ export default function SolarPlanner() {
     if (action.batteryKWh) { setWithBattery(true); setCustom((c) => ({ ...c, batteryKWh: action.batteryKWh })); }
     if (action.structure) setSite((st) => ({ ...st, structure: action.structure }));
     if (action.rowSpacing) setSite((st) => ({ ...st, rowSpacing: action.rowSpacing }));
+    if (action.panelDir !== undefined) setSite((st) => ({ ...st, panelDir: action.panelDir }));
   };
 
   const k = hour % 24;
@@ -349,6 +350,7 @@ export default function SolarPlanner() {
             season={season} setSeason={setSeason}
             site={site} setSite={setSite}
             onEditRoof={openEditor} onRemoveItem={removeItem}
+            onRoomPanels={(id, on) => changeItem(id, { panelsOnTop: on })}
             onAddItem={(type) => { if (type === 'building') addItem(type, 0, roof.length / 2 + SURROUNDING.d / 2 + 6); else addItem(type, 0, 0); openEditor(); }}
             roof={roof} setRoof={setRoof}
             panelWatts={panelWatts} setPanelWatts={setPanelWatts}
@@ -370,7 +372,8 @@ export default function SolarPlanner() {
               const raw = (site.items || []).find((o) => o.id === selectedId) || (site.surroundings || []).find((b) => b.id === selectedId);
               return (
                 <>
-                  <EditorToolbar tool={tool} setTool={setTool} onDone={closeEditor} structureLabel={plan.structure.label} fits={plan.layout.maxPanels} fullscreen={fs.active} onFullscreen={fs.toggle} />
+                  <EditorToolbar tool={tool} setTool={setTool} onDone={closeEditor} structureLabel={plan.structure.label} fits={plan.layout.maxPanels} fullscreen={fs.active} onFullscreen={fs.toggle}
+                    panelSide={plan.layout.side} onTurnPanels={() => setSite((st) => ({ ...st, panelDir: (plan.layout.turn + 1) % 4 }))} />
                   <EditorInspector
                     item={raw && sel ? { ...raw, ...sel } : null} tool={tool}
                     onChange={(patch) => changeItem(selectedId, patch)}

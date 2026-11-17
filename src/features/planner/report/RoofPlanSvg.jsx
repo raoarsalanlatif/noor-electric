@@ -3,6 +3,7 @@
 // every installed panel, and dimension lines (roof width/depth, panel array size, setbacks).
 // Text inside the SVG is English/numbers only; bilingual labels are in the HTML around it.
 import { facingLabel } from '../shading';
+import { compassName } from '../frame';
 
 const C = {
   roof: '#eef1f5', parapet: '#9aa4b2', panel: '#1e3a8a', panelLine: '#60a5fa',
@@ -46,7 +47,9 @@ export default function RoofPlanSvg({ plan, roof, width = 700, height = 560 }) {
   const Y = (z) => oy + (z + L / 2) * s;
   const m = (v) => `${v.toFixed(1)} m`;
   const panels = layout.slots.slice(0, installed);
-  const pw = layout.colW - 0.03; const pd = layout.depth;
+  // footprint of a panel along the house's x and z: it is longer along the side the panels lean towards
+  const pw = layout.footX; const pd = layout.footZ;
+  const sideways = layout.turn % 2 === 1;
   const ph = plan.site.parapetH || 0;
 
   // extents of the panel array
@@ -55,7 +58,7 @@ export default function RoofPlanSvg({ plan, roof, width = 700, height = 560 }) {
     const xs = panels.map((p) => p.x); const zs = panels.map((p) => p.z);
     arr = { x0: Math.min(...xs) - pw / 2, x1: Math.max(...xs) + pw / 2, z0: Math.min(...zs) - pd / 2, z1: Math.max(...zs) + pd / 2 };
   }
-  const rows = new Set(panels.map((p) => p.z.toFixed(2))).size;
+  const rows = new Set(panels.map((p) => (sideways ? p.x : p.z).toFixed(2))).size;
   const roofH = L * s;
 
   return (
@@ -93,7 +96,9 @@ export default function RoofPlanSvg({ plan, roof, width = 700, height = 560 }) {
       {panels.map((p, i) => (
         <g key={i}>
           <rect x={X(p.x - pw / 2)} y={Y(p.z - pd / 2)} width={pw * s} height={pd * s} fill={C.panel} stroke={C.panelLine} strokeWidth="1" rx="1.5" />
-          <line x1={X(p.x)} y1={Y(p.z - pd / 2) + 2} x2={X(p.x)} y2={Y(p.z + pd / 2) - 2} stroke={C.panelLine} strokeWidth="0.6" opacity="0.7" />
+          {sideways
+            ? <line x1={X(p.x - pw / 2) + 2} y1={Y(p.z)} x2={X(p.x + pw / 2) - 2} y2={Y(p.z)} stroke={C.panelLine} strokeWidth="0.6" opacity="0.7" />
+            : <line x1={X(p.x)} y1={Y(p.z - pd / 2) + 2} x2={X(p.x)} y2={Y(p.z + pd / 2) - 2} stroke={C.panelLine} strokeWidth="0.6" opacity="0.7" />}
         </g>
       ))}
 
@@ -120,7 +125,7 @@ export default function RoofPlanSvg({ plan, roof, width = 700, height = 560 }) {
         {facing === 180 ? 'FRONT · SOUTH (SUN SIDE) ▼' : `FRONT · FACES ${facingLabel(facing).toUpperCase()} ▼`}
       </text>
       <text x={8} y={16} fontSize="10" fill="#64748b" fontFamily="Inter, Arial, sans-serif">
-        {`${panel.watts} W panels ${panel.width.toFixed(2)} × ${panel.length.toFixed(2)} m · row pitch ${layout.pitch.toFixed(1)} m · structure: ${plan.structure.label}`}
+        {`${panel.watts} W panels ${panel.width.toFixed(2)} × ${panel.length.toFixed(2)} m · row pitch ${layout.pitch.toFixed(1)} m · structure: ${plan.structure.label} · panels lean to the ${layout.side} (${compassName(layout.bearing)})`}
       </text>
     </svg>
   );

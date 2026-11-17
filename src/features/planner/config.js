@@ -121,6 +121,9 @@ export const DEFAULT_SITE = {
   structure: 'auto', // 'auto' picks the cheapest structure that fits; or 'L2' | 'L3' | 'elevated'
   items: defaultRoofItems({ width: 10, length: 14 }),
   facing: 180, // the front of the house faces south
+  // Side of the roof the panels lean towards: 'auto' = the side that looks most nearly south,
+  // or 0 front, 1 right, 2 back, 3 left (as seen from the street).
+  panelDir: 'auto',
   surroundings: [], // nearby buildings that may shade the roof
   tilt: 15, // panel tilt in degrees, set by the L2 / L3 frames; not a customer choice
   // 'compact' keeps a walkway between rows and fits the most panels (shade between rows is counted).
