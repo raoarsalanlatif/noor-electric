@@ -16,8 +16,8 @@ const total = (a) => a.reduce((s, v) => s + v, 0);
 describe('shading', () => {
   it('does nothing for a south-facing house with open sky', () => {
     const p = computePlan(base);
-    expect(p.shading.active).toBe(false);
-    expect(p.shading.lossPct).toBe(0);
+    expect(p.shading.sources.buildings).toBe(0);
+    expect(p.shading.orientPct).toBeCloseTo(0, 9);
     expect(p.issues.map((i) => i.type)).not.toContain('shade');
   });
 
@@ -32,12 +32,12 @@ describe('shading', () => {
 
   it('the same building to the north (behind) casts no shade on the roof', () => {
     const p = withSite({ surroundings: [tower(0, -20)] });
-    expect(p.shading.lossPct).toBe(0);
+    expect(p.shading.sources.buildings).toBe(0);
     expect(p.solarKWh).toBeCloseTo(computePlan(base).solarKWh, 9);
   });
 
   it('a building lower than the roof casts no shade', () => {
-    expect(withSite({ surroundings: [tower(0, 14, 5)] }).shading.lossPct).toBe(0);
+    expect(withSite({ surroundings: [tower(0, 14, 5)] }).shading.sources.buildings).toBe(0);
   });
 
   it('a building to the east shades the morning, one to the west the afternoon', () => {
