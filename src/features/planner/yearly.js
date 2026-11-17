@@ -5,6 +5,9 @@
 
 import { computePlan } from './sizing';
 import { PLANNER_CONFIG as CFG } from './config';
+import { orientationFactor, facingOf } from './shading';
+import { tiltDeg } from '../three/dims';
+import { dailyShape } from '../three/sun';
 
 export const MONTHS = [
   ['January', 31], ['February', 28], ['March', 31], ['April', 30], ['May', 31], ['June', 30],
@@ -44,6 +47,9 @@ export function yearlyOutlook(input, plan) {
       saving: (p.monthlySaving / 30) * days,
       perPanel: p.shading.perPanel,
       billBefore: (p.billBefore / 30) * days,
+      // share of the panel area in direct sun in each hour (0-100), or null when the sun is down
+      sunAccess: dailyShape(p.city.lat, p.season).map((w, k) => (w > 0 ? Math.round((1 - p.shading.shade[k]) * 100) : null)),
+      clippedKWh: p.clippedKWh * days,
     };
   });
   const sum = (k) => months.reduce((s, x) => s + x[k], 0);
@@ -54,6 +60,24 @@ export function yearlyOutlook(input, plan) {
   // share of each panel's yearly energy lost to shade (months weighted by the energy they would make unshaded)
   const openOf = (x) => (x.shadePct < 100 ? x.kWh / (1 - x.shadePct / 100) : 0);
   year.perPanel = Array.from({ length: plan.installed }, (_, i) => (open > 0 ? months.reduce((s, x) => s + (x.perPanel[i] || 0) * openOf(x), 0) / open : 0));
+
+  // Solar access: share of the unshaded energy the panels still receive over the year.
+  year.sunAccessPct = 100 - year.shadePct;
+  // Tilt and orientation factor: this tilt and direction against the best fixed tilt facing south.
+  const lat = plan.city.lat;
+  const yearFactor = (tilt, facing) => MONTHS.reduce((s, [, days], m) => {
+    const season = monthSun(m);
+    return s + days * season.sunFactor * orientationFactor(lat, season, tilt, facing);
+  }, 0);
+  let bestTilt = 0; let bestFactor = 0;
+  for (let tilt = 0; tilt <= 45; tilt += 5) {
+    const f = yearFactor(tilt, 180);
+    if (f > bestFactor) { bestFactor = f; bestTilt = tilt; }
+  }
+  year.bestTilt = bestTilt;
+  year.tofPct = bestFactor > 0 ? Math.min(100, (yearFactor(tiltDeg(plan.site), facingOf(plan.site)) / bestFactor) * 100) : 100;
+  year.tsrfPct = (year.sunAccessPct * year.tofPct) / 100;
+  year.clippedKWh = sum('clippedKWh');
 
   const life = [];
   let cumKWh = 0; let cumSaving = 0; let paybackYear = null;

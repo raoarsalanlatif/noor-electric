@@ -1,9 +1,9 @@
 import { APPLIANCE_MAP, PROFILES } from './appliances';
 import { PLANNER_CONFIG as CFG, PANEL_OPTIONS, INVERTER_SIZES, CITIES, DEFAULT_SITE, STRUCTURES, STRUCTURE_ORDER } from './config';
-import { dailyShape, seasonOf } from '../three/sun';
-import { computeShading, facingLabel } from './shading';
+import { dailyShape, seasonOf, sunFor } from '../three/sun';
+import { tiltRad, tiltDeg, REF_TILT_DEG } from '../three/dims';
+import { computeShading, facingLabel, facingOf } from './shading';
 
-const TILT = (15 * Math.PI) / 180;
 const DIVERSITY = 0.8; // not every appliance switches on at the same instant
 
 const round = (n, d = 1) => Math.round(n * 10 ** d) / 10 ** d;
@@ -93,11 +93,29 @@ export function keepOutZones(obstacles, structure) {
   }).filter(Boolean);
 }
 
-export function roofLayout(roof, panel, site = DEFAULT_SITE, structureKey = 'L2') {
+const WINTER = { declination: -23.44, sunFactor: 1 };
+
+/**
+ * Clear distance (metres) a panel row needs behind the next one so that it is not shaded
+ * between 10 am and 2 pm on 21 December.
+ */
+export function winterRowGap(lat, panel, site = DEFAULT_SITE) {
+  const rise = panel.length * Math.sin(tiltRad(site));
+  const facing = facingOf(site);
+  return [10, 14].reduce((gap, hour) => {
+    const sun = sunFor(lat, WINTER, hour, facing);
+    // the shadow of the high back edge reaches this far behind the row
+    return sun.alt > 0 ? Math.max(gap, (rise * Math.max(0, sun.dir[2])) / sun.dir[1]) : gap;
+  }, 0);
+}
+
+export function roofLayout(roof, panel, site = DEFAULT_SITE, structureKey = 'L2', lat = 32) {
   const structure = STRUCTURES[structureKey] || STRUCTURES.L2;
   const elevated = structure.key === 'elevated';
-  const depth = panel.length * Math.cos(TILT);
-  const pitch = depth + 0.6;
+  const depth = panel.length * Math.cos(tiltRad(site));
+  const winterSafe = site.rowSpacing === 'winter';
+  const rowGap = winterSafe ? Math.max(CFG.rowGap, winterRowGap(lat, panel, site)) : CFG.rowGap;
+  const pitch = depth + rowGap;
   const colW = panel.width + CFG.panelGap;
   // parapet walls shade the panels behind them, mostly on the sunny (front) side;
   // a higher frame clears more of the wall, an elevated one clears it completely
@@ -127,7 +145,7 @@ export function roofLayout(roof, panel, site = DEFAULT_SITE, structureKey = 'L2'
     z: roof.length / 2 + 0.4 + depth / 2 + Math.floor(k / ovCols) * pitch,
   });
   return {
-    structure, cols, rows, pitch, colW, depth, sFront, sOther,
+    structure, cols, rows, pitch, colW, depth, sFront, sOther, rowGap, winterSafe,
     slots, obstacles, keepOuts, overflowSlot,
     maxPanels: slots.length,
     footprint: pitch * colW,
@@ -139,9 +157,9 @@ export function roofLayout(roof, panel, site = DEFAULT_SITE, structureKey = 'L2'
  * Compare all structures for this roof and pick one.
  * 'auto' = the cheapest structure that fits the panels we need; if none fits, the one that fits the most.
  */
-export function chooseStructure(roof, panel, site, panelsWanted) {
+export function chooseStructure(roof, panel, site, panelsWanted, lat = 32) {
   const options = STRUCTURE_ORDER.map((key) => {
-    const layout = roofLayout(roof, panel, site, key);
+    const layout = roofLayout(roof, panel, site, key, lat);
     return { key, structure: STRUCTURES[key], layout, maxPanels: layout.maxPanels, fits: layout.maxPanels >= panelsWanted };
   });
   const best = options.find((o) => o.fits)
@@ -209,7 +227,7 @@ export function computePlan(input) {
   const requiredKW = dailyKWh / (sunHours * CFG.performanceRatio);
   const panelsNeeded = Math.ceil((requiredKW * 1000) / panel.watts);
   const panelsWanted = mode === 'custom' ? custom.panels : panelsNeeded;
-  const structurePick = chooseStructure(roof, panel, site, panelsWanted);
+  const structurePick = chooseStructure(roof, panel, site, panelsWanted, city.lat);
   const { layout } = structurePick.picked;
   const structure = layout.structure;
   const areaNeeded = panelsNeeded * layout.footprint + 2 * CFG.roofSetback * (roof.width + roof.length);
@@ -219,7 +237,9 @@ export function computePlan(input) {
   const idealSolar = shape.map((s) => s * requiredKW);
   const nightKWh = sum(loadKw.map((l, k) => Math.max(0, l - idealSolar[k])));
   const recBattery = Math.ceil(nightKWh / CFG.batteryUsable / 2.5) * 2.5;
-  const recInverter = pickInverter((peakW * CFG.inverterSafetyFactor) / 1000);
+  // the inverter has to carry the peak load and must not be undersized for the array it is connected to
+  const autoArrayKW = (Math.min(panelsNeeded, layout.maxPanels) * panel.watts) / 1000;
+  const recInverter = pickInverter(Math.max((peakW * CFG.inverterSafetyFactor) / 1000, autoArrayKW / CFG.dcAcRatioMax));
 
   const chosen = mode === 'custom'
     ? { panels: custom.panels, inverterKW: custom.inverterKW, batteryKWh: withBattery ? custom.batteryKWh : 0 }
@@ -230,7 +250,13 @@ export function computePlan(input) {
   const systemKW = (installed * panel.watts) / 1000;
   // surrounding buildings and the direction the house faces (no effect on a south-facing house with open sky)
   const shading = computeShading({ roof, site, layout, panel, installed, lat: city.lat, season });
-  const solarKw = shading.active ? shape.map((s, k) => s * systemKW * shading.factor[k]) : shape.map((s) => s * systemKW);
+  const solarKwArray = shading.active ? shape.map((s, k) => s * systemKW * shading.factor[k]) : shape.map((s) => s * systemKW);
+  // the inverter can not deliver more than its rating: anything above it is clipped (lost)
+  const cap = chosen.inverterKW > 0 ? chosen.inverterKW : Infinity;
+  const solarKw = solarKwArray.map((s) => Math.min(s, cap));
+  const clippedKWh = sum(solarKwArray) - sum(solarKw);
+  const clipPct = sum(solarKwArray) > 0 ? (clippedKWh / sum(solarKwArray)) * 100 : 0;
+  const dcAcRatio = chosen.inverterKW > 0 ? systemKW / chosen.inverterKW : 0;
 
   const simArgs = { loadKw, running, solarKw, inverterKW: chosen.inverterKW, batteryKWh: chosen.batteryKWh };
   // money is always calculated with the grid available; the off-grid run only drives the outage view
@@ -284,19 +310,43 @@ export function computePlan(input) {
       detail: `Solar covers ${Math.round(coverage * 100)}% of your daily use. The rest comes from the grid.`,
     });
   }
-  if (shading.lossPct >= 3) {
+  if (dcAcRatio > CFG.dcAcRatioMax + 1e-9) {
+    issues.push({
+      type: 'oversize', severity: 'warn',
+      title: 'Array too big for the inverter',
+      detail: `${round(systemKW)} kW of panels on a ${chosen.inverterKW} kW inverter is ${round(dcAcRatio, 2)} times its rating (keep it under ${CFG.dcAcRatioMax}).${clipPct >= 1 ? ` About ${Math.round(clipPct)}% of the day's solar energy is clipped.` : ''} Check the inverter's PV input limit.`,
+    });
+  }
+  if (shading.sources.buildings >= 3) {
     const wh = shading.worstHour;
     issues.push({
       type: 'shade', severity: 'warn',
       title: 'Shade from nearby buildings',
-      detail: `Nearby buildings shade the panels and cost about ${Math.round(shading.lossPct)}% of the day's solar energy${wh === null ? '' : `, mostly around ${((wh + 11) % 12) + 1} ${wh < 12 ? 'am' : 'pm'}`}.`,
+      detail: `Nearby buildings shade the panels and cost about ${Math.round(shading.sources.buildings)}% of the day's solar energy${wh === null ? '' : `, mostly around ${((wh + 11) % 12) + 1} ${wh < 12 ? 'am' : 'pm'}`}.`,
+    });
+  }
+  if (shading.sources.roof >= 3) {
+    issues.push({
+      type: 'roofshade', severity: 'warn',
+      title: 'Shade from things on the roof',
+      detail: `The room, tanks or parapet wall shade the panels and cost about ${Math.round(shading.sources.roof)}% of the day's solar energy. A higher structure clears them.`,
+    });
+  }
+  if (shading.sources.rows >= 3) {
+    issues.push({
+      type: 'rowshade', severity: 'warn',
+      title: 'Panel rows shade each other',
+      detail: `The rows are close together, so each one shades the row behind it and about ${Math.round(shading.sources.rows)}% of the day's solar energy is lost.`,
     });
   }
   if (shading.orientPct <= -5) {
+    const turnedAway = shading.facing !== 180;
     issues.push({
       type: 'facing', severity: 'warn',
-      title: `Roof faces ${facingLabel(shading.facing).toLowerCase()}`,
-      detail: `Panels that lean ${facingLabel(shading.facing).toLowerCase()} instead of south make about ${Math.round(-shading.orientPct)}% less energy.`,
+      title: turnedAway ? `Roof faces ${facingLabel(shading.facing).toLowerCase()}` : `Panels tilted ${tiltDeg(site)}°`,
+      detail: turnedAway
+        ? `Panels that lean ${facingLabel(shading.facing).toLowerCase()} instead of south make about ${Math.round(-shading.orientPct)}% less energy.`
+        : `At ${tiltDeg(site)}° the panels make about ${Math.round(-shading.orientPct)}% less energy in this season than at ${REF_TILT_DEG}°.`,
     });
   }
   const status = issues.some((i) => i.severity === 'fail') ? 'fail' : issues.length ? 'warn' : 'ok';
@@ -319,7 +369,7 @@ export function computePlan(input) {
     });
     const big = PANEL_OPTIONS[PANEL_OPTIONS.length - 1];
     if (big.watts !== panel.watts) {
-      const bigLayout = roofLayout(roof, big, site, structure.key);
+      const bigLayout = roofLayout(roof, big, site, structure.key, city.lat);
       const bigPct = Math.min(100, Math.round(((bigLayout.maxPanels * (big.watts / 1000) * sunHours * CFG.performanceRatio) / dailyKWh) * 100));
       if (bigPct > fitPct) fixes.push({ title: `Use ${big.watts} W panels`, detail: `Higher-wattage panels raise coverage to about ${bigPct}%.`, action: { panelWatts: big.watts } });
     }
@@ -333,8 +383,15 @@ export function computePlan(input) {
     const pct = Math.round((1 - newKWh / dailyKWh) * 100);
     if (pct > 5) fixes.push({ title: 'Switch to inverter ACs', detail: `Replacing ${nonInvAC} non-inverter AC${nonInvAC > 1 ? 's' : ''} cuts your daily use by about ${pct}%.`, action: { swapAC: true } });
   }
+  if (shading.sources.rows >= 3 && !layout.winterSafe) {
+    fixes.push({ title: 'Use winter-safe row spacing', detail: 'Opens the rows so none shades the next around midday in December. Fewer panels fit.', action: { rowSpacing: 'winter' } });
+  }
+  const oversizeFix = pickInverter(Math.max((peakW * CFG.inverterSafetyFactor) / 1000, systemKW / CFG.dcAcRatioMax));
+  if (tripHours === 0 && dcAcRatio > CFG.dcAcRatioMax + 1e-9 && oversizeFix > chosen.inverterKW) {
+    fixes.push({ title: `Upgrade to ${oversizeFix} kW inverter`, detail: `Sized for ${round(systemKW)} kW of panels as well as your peak load.`, action: { inverterKW: oversizeFix } });
+  }
   if (tripHours > 0) {
-    fixes.push({ title: `Upgrade to ${recInverter} kW inverter`, detail: 'Or avoid running all ACs, the motor and the iron at the same time.', action: { inverterKW: recInverter } });
+    fixes.push({ title: `Upgrade to ${Math.max(recInverter, oversizeFix)} kW inverter`, detail: 'Or avoid running all ACs, the motor and the iron at the same time.', action: { inverterKW: Math.max(recInverter, oversizeFix) } });
   }
   if (offGrid && blackoutHours - tripHours > 0 && recBattery > chosen.batteryKWh) {
     fixes.push({ title: `Add a ${recBattery} kWh battery`, detail: 'Enough stored energy to carry your night load.', action: { batteryKWh: recBattery } });
@@ -348,9 +405,9 @@ export function computePlan(input) {
       key, label: st.label, short: st.short, desc: st.desc, maxPanels, fits,
       cost: Math.min(maxPanels, panelsWanted) * (panel.watts / 1000) * st.costPerKW,
     })),
-    loadKw, running, solarKw, sim, shading,
+    loadKw, running, solarKw, solarKwArray, clippedKWh, clipPct, dcAcRatio, sim, shading,
     // what the same array would make facing south with open sky (the reference for the performance meter)
-    solarKwOpen: shading.active ? shape.map((s) => s * systemKW) : solarKw,
+    solarKwOpen: shape.map((s) => s * systemKW),
     dailyKWh, peakW, requiredKW, panelsNeeded, areaNeeded,
     recommended: { inverterKW: recInverter, batteryKWh: recBattery, panels: panelsNeeded },
     chosen, installed, overflow, systemKW,

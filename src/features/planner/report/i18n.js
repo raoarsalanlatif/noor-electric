@@ -171,12 +171,12 @@ export const basisNotes = (c, p) => [
     'ماہ بہ ماہ دھوپ کے گھنٹے ایک ماڈل سے لیے گئے ہیں (دسمبر میں سب سے کم، جون میں سب سے زیادہ)، یہ ناپا ہوا موسمی ڈیٹا نہیں۔',
   ],
   [
-    `System losses: ${Math.round((1 - c.performanceRatio) * 100)}% for heat, dust, wiring and the inverter. Panels are tilted 15° towards the front of the house.`,
-    `سسٹم کے نقصانات: گرمی، گرد، وائرنگ اور انورٹر کی مد میں ${Math.round((1 - c.performanceRatio) * 100)}٪۔ پینلز 15 ڈگری پر گھر کے سامنے کی طرف جھکے ہیں۔`,
+    `System losses: ${Math.round((1 - c.performanceRatio) * 100)}% for heat, dust, wiring and the inverter. Panels are tilted ${p.site?.tilt ?? 15}° towards the front of the house.`,
+    `سسٹم کے نقصانات: گرمی، گرد، وائرنگ اور انورٹر کی مد میں ${Math.round((1 - c.performanceRatio) * 100)}٪۔ پینلز ${p.site?.tilt ?? 15} ڈگری پر گھر کے سامنے کی طرف جھکے ہیں۔`,
   ],
   [
-    `Shade: sun rays are traced to five points on every panel, four times an hour. A panel in shadow is taken to lose ${Math.round(c.shadeBeamShare * 100)}% of its output. Only the buildings entered are counted; trees, poles and future construction are not.`,
-    `سایہ: ہر پینل کے پانچ مقامات تک سورج کی شعاعیں ہر گھنٹے میں چار بار جانچی جاتی ہیں۔ سائے میں آنے والا پینل اپنی ${Math.round(c.shadeBeamShare * 100)}٪ پیداوار کھو دیتا ہے۔ صرف درج کی گئی عمارتیں شمار ہوتی ہیں؛ درخت، کھمبے اور آئندہ کی تعمیرات شامل نہیں۔`,
+    `Shade: sun rays are traced to 18 points on every panel, four times an hour. A panel in shadow is taken to lose ${Math.round(c.shadeBeamShare * 100)}% of its output. Nearby buildings entered, things on the roof and the panel row in front are counted; trees, poles and future construction are not.`,
+    `سایہ: ہر پینل کے 18 مقامات تک سورج کی شعاعیں ہر گھنٹے میں چار بار جانچی جاتی ہیں۔ سائے میں آنے والا پینل اپنی ${Math.round(c.shadeBeamShare * 100)}٪ پیداوار کھو دیتا ہے۔ درج کی گئی عمارتیں، چھت پر موجود چیزیں اور اگلی قطار کے پینل شمار ہوتے ہیں؛ درخت، کھمبے اور آئندہ کی تعمیرات شامل نہیں۔`,
   ],
   [
     `Money: grid electricity at Rs ${c.tariffPerKWh} per unit, exported units credited at Rs ${c.exportRatePerKWh}. Tariffs are kept at today's level for all 25 years.`,

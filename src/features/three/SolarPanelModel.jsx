@@ -56,10 +56,10 @@ export default function SolarPanelModel({ panel, cellsRef, dirt = 0, realistic =
 const legMat = () => shared('lm', () => new THREE.MeshStandardMaterial({ color: '#9ca3af', metalness: 0.8, roughness: 0.35 }));
 
 /** Mounting legs for a tilted panel sitting on a flat roof (the four legs are one mesh). */
-export function PanelLegs({ panel, base = 0.25 }) {
-  const geo = shared(`l:${panel.width}:${panel.length}:${base}`, () => {
-    const depth = panel.length * Math.cos(PANEL_TILT);
-    const back = base + Math.sin(PANEL_TILT) * panel.length;
+export function PanelLegs({ panel, base = 0.25, tilt = PANEL_TILT }) {
+  const geo = shared(`l:${panel.width}:${panel.length}:${base}:${tilt}`, () => {
+    const depth = panel.length * Math.cos(tilt);
+    const back = base + Math.sin(tilt) * panel.length;
     const parts = [];
     [-panel.width / 2 + 0.1, panel.width / 2 - 0.1].forEach((x) => {
       parts.push(new THREE.BoxGeometry(0.04, base, 0.04).translate(x, base / 2, depth / 2 - 0.1));
