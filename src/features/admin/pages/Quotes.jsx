@@ -11,6 +11,7 @@ import { a, Card, PageHead, Btn, Badge, Table, Empty, ErrorBox, Modal, Field, Fo
 import { QUOTE_LABELS, QUOTE_TONES } from '../labels';
 import { EventForm } from './CalendarPage';
 import QuotationEditor from '../quotation/QuotationEditor';
+import QuotationPdfButton from '../quotation/QuotationPdfButton';
 
 const Filters = styled.div`
   display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px;
@@ -91,6 +92,7 @@ function QuoteModal({ quote, onClose, onSaved }) {
             {isNew
               ? <Btn type="button" $v="ghost" onClick={saveAndBuild}><FontAwesomeIcon icon={faFileInvoiceDollar} /> Save &amp; build quotation</Btn>
               : <Btn type="button" $v="gold" onClick={() => setBuilder({ ...quote, ...f })}><FontAwesomeIcon icon={faFileInvoiceDollar} /> {f.quotation ? 'Edit quotation document' : 'Build quotation document'}</Btn>}
+            {!isNew && f.quotation && <QuotationPdfButton doc={f.quotation} onError={setErr} />}
             <Btn type="button" onClick={save}>Save</Btn>
           </div>
         </>
@@ -146,13 +148,13 @@ export default function Quotes() {
               <thead><tr><th>Received</th><th>Customer</th><th>Location</th><th>Request</th><th>Source</th><th>Quoted</th><th>Status</th></tr></thead>
               <tbody>
                 {items.map((q) => (
-                  <tr key={q._id} onClick={() => setOpen(q)} style={{ cursor: 'pointer' }}>
+                  <tr key={q._id} onClick={(e) => { if (!e.target.closest('button')) setOpen(q); }} style={{ cursor: 'pointer' }}>
                     <td>{fmtDate(q.createdAt)}</td>
                     <td><b>{q.name}</b><br /><span style={{ color: a.muted }}>{q.phone}</span></td>
                     <td>{[q.area, q.city].filter(Boolean).join(', ') || '—'}</td>
                     <td>{q.plan?.systemKW ? `${q.plan.systemKW} kW design${q.plan.status ? ` (${q.plan.status})` : ''}` : q.systemType || (q.monthlyBill ? `Bill ${pkr(q.monthlyBill)}` : '—')}</td>
                     <td><Badge $tone={q.source === 'planner' ? 'teal' : q.source === 'manual' ? 'gray' : 'blue'}>{q.source}</Badge></td>
-                    <td>{pkr(q.quotedAmount)}{q.quotation && <span title="Quotation document ready" style={{ color: a.blue, marginLeft: 6 }}><FontAwesomeIcon icon={faFileInvoiceDollar} /></span>}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{pkr(q.quotedAmount)}{q.quotation && <QuotationPdfButton doc={q.quotation} label="" $sm style={{ marginLeft: 8 }} />}</td>
                     <td><Badge $tone={QUOTE_TONES[q.status]}>{QUOTE_LABELS[q.status]}</Badge></td>
                   </tr>
                 ))}
