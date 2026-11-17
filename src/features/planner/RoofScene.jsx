@@ -55,12 +55,14 @@ function heatColor(loss) {
   return c;
 }
 
-function Panel({ index, slot, overflow, panel, installedRef, glow, structure, roofTop, seed, shadeRef, heat, realistic, tilt }) {
+function Panel({ index, slot, overflow, panel, installedRef, glow, structure, roofTop, seed, shadeRef, heat, realistic, tilt, turnY }) {
   const g = useRef();
   const cells = useRef();
   const st = useRef({ phase: 'hidden', vy: 0, t: 0 });
-  const elevated = structure.key === 'elevated';
-  const base = structure.frontH;
+  // panels on top of a room sit on their own low frame, whatever the main structure is
+  const elevated = structure.key === 'elevated' && !slot.onRoom;
+  const base = slot.base ?? structure.frontH;
+  const legs = slot.onRoom ? 0.15 : base;
   const target = useMemo(
     () => [slot.x, roofTop + base + Math.sin(tilt) * panel.length * 0.5, slot.z],
     [slot.x, slot.z, roofTop, base, panel.length, tilt],
@@ -99,6 +101,8 @@ function Panel({ index, slot, overflow, panel, installedRef, glow, structure, ro
 
   return (
     <group ref={g} visible={false}>
+      {/* turned so the panel leans towards the chosen side of the roof */}
+      <group rotation={[0, turnY, 0]}>
       <group rotation={[tilt, 0, 0]}>
         <SolarPanelModel panel={panel} cellsRef={cells} realistic={realistic} />
         {/* shade map: how much of the day's energy this panel loses to nearby buildings */}
@@ -110,21 +114,23 @@ function Panel({ index, slot, overflow, panel, installedRef, glow, structure, ro
         )}
       </group>
       {!elevated && !overflow && (
-        <group position={[0, -(base + Math.sin(tilt) * panel.length * 0.5), 0]}>
-          <PanelLegs panel={panel} base={base} tilt={tilt} />
+        <group position={[0, -(legs + Math.sin(tilt) * panel.length * 0.5), 0]}>
+          <PanelLegs panel={panel} base={legs} tilt={tilt} />
         </group>
       )}
+      </group>
     </group>
   );
 }
 
 /* ----------------------------- elevated frame ----------------------------- */
-function ElevatedFrame({ layout, roofTop, panel }) {
+function ElevatedFrame({ layout, roofTop }) {
   const ELEVATED_H = layout.structure.frontH;
-  if (!layout.slots.length) return null;
-  const xs = layout.slots.map((s) => s.x); const zs = layout.slots.map((s) => s.z);
-  const minX = Math.min(...xs) - panel.width / 2; const maxX = Math.max(...xs) + panel.width / 2;
-  const minZ = Math.min(...zs) - layout.depth / 2; const maxZ = Math.max(...zs) + layout.depth / 2;
+  const onFrame = layout.slots.filter((s) => !s.onRoom); // panels on top of a room have their own frame
+  if (!onFrame.length) return null;
+  const xs = onFrame.map((s) => s.x); const zs = onFrame.map((s) => s.z);
+  const minX = Math.min(...xs) - layout.footX / 2; const maxX = Math.max(...xs) + layout.footX / 2;
+  const minZ = Math.min(...zs) - layout.footZ / 2; const maxZ = Math.max(...zs) + layout.footZ / 2;
   const cols = [];
   for (let x = minX; x <= maxX + 0.01; x += Math.max(2.4, (maxX - minX) / 4)) {
     for (let z = minZ; z <= maxZ + 0.01; z += Math.max(2.6, (maxZ - minZ) / 3)) {
@@ -156,7 +162,7 @@ function ElevatedFrame({ layout, roofTop, panel }) {
 }
 
 /* ------------------------------ install crew ------------------------------ */
-function InstallCrew({ targets, panel, roof, roofTop, parapetH, installedRef, ctl, onProgress, depth, realistic, tilt }) {
+function InstallCrew({ targets, panel, roof, roofTop, parapetH, installedRef, ctl, onProgress, depth, realistic, tilt, turnY }) {
   const roofW = useRef(); const groundW = useRef();
   const roofAnim = useRef({ mode: 'idle', moving: false, speed: 1 });
   const groundAnim = useRef({ mode: 'idle', moving: false, speed: 1 });
@@ -202,7 +208,12 @@ function InstallCrew({ targets, panel, roof, roofTop, parapetH, installedRef, ct
     ga.mode = 'idle'; ga.moving = false;
 
     const t = total ? targets[Math.min(s.idx, total - 1)] : null;
-    const stand = t ? tmp.set(t.pos[0], roofTop, Math.min(t.pos[2] + depth / 2 + 0.45, L / 2 - 0.45)) : edge;
+    // the worker stands just in front of the panel's low edge, on the side it leans towards
+    const reach = depth / 2 + 0.45;
+    const stand = t ? tmp.set(
+      Math.max(-W / 2 + 0.45, Math.min(W / 2 - 0.45, t.pos[0] + Math.sin(turnY) * reach)), roofTop,
+      Math.max(-L / 2 + 0.45, Math.min(L / 2 - 0.45, t.pos[2] + Math.cos(turnY) * reach)),
+    ) : edge;
 
     const walkTo = (dest, mode) => {
       const dx = dest.x - pos.x; const dz = dest.z - pos.z;
@@ -247,7 +258,7 @@ function InstallCrew({ targets, panel, roof, roofTop, parapetH, installedRef, ct
           THREE.MathUtils.lerp(roofTop + 1.6, t.pos[1], k),
           THREE.MathUtils.lerp(pos.z - 0.4, t.pos[2], k),
         );
-        cp.rotation.set(tilt * k, 0, 0);
+        cp.rotation.set(tilt * k, turnY, 0, 'YXZ');
         if (s.t >= 1) {
           installedRef.current = s.idx + 1;
           s.phase = t.overflow ? 'oops' : 'return'; s.t = 0; s.idx += 1;
@@ -454,8 +465,8 @@ function RoofEditor({ layout, roof, roofTop, tool, selectedId, onPlace, onSelect
     return () => window.removeEventListener('pointerup', endDrag);
   });
   const y = roofTop + 0.015;
-  const slotW = layout.colW - 0.08;
-  const slotD = layout.depth - 0.08;
+  const slotW = layout.footX - 0.05;
+  const slotD = layout.footZ - 0.08;
 
   return (
     <group>
@@ -488,7 +499,7 @@ function RoofEditor({ layout, roof, roofTop, tool, selectedId, onPlace, onSelect
 
       {/* panel spots that remain */}
       {layout.slots.map((s, i) => (
-        <mesh key={i} position={[s.x, y + 0.01 + (layout.structure.key === 'elevated' ? layout.structure.frontH : 0), s.z]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
+        <mesh key={i} position={[s.x, y + 0.01 + (s.onRoom ? s.base : layout.structure.key === 'elevated' ? layout.structure.frontH : 0), s.z]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
           <planeGeometry args={[slotW, slotD]} />
           <meshBasicMaterial color="#60a5fa" transparent opacity={layout.structure.key === 'elevated' ? 0.35 : 0.22} depthWrite={false} side={THREE.DoubleSide} />
         </mesh>
@@ -599,6 +610,7 @@ function SceneContent({ plan, roof, site, lat, season, clock, onHour, crewCtl, o
   const elevated = structure.key === 'elevated';
   const base = structure.frontH;
   const tilt = tiltRad(site);
+  const turnY = (layout.turn * Math.PI) / 2; // quarter turns towards the side the panels lean to
   const { facing, buildings } = plan.shading;
   // direction of south on the roof (x, z), for the editor's sun-side marker
   const south = useMemo(() => { const a = ((360 - facing) * Math.PI) / 180; return [Math.sin(a), -Math.cos(a)]; }, [facing]);
@@ -621,7 +633,7 @@ function SceneContent({ plan, roof, site, lat, season, clock, onHour, crewCtl, o
   const targets = useMemo(() => Array.from({ length: chosen.panels }, (_, i) => {
     const overflow = i >= layout.maxPanels;
     const slot = overflow ? layout.overflowSlot(i - layout.maxPanels) : layout.slots[i];
-    return { slot, overflow, pos: [slot.x, roofTop + base + Math.sin(tilt) * panel.length * 0.5, slot.z] };
+    return { slot, overflow, pos: [slot.x, roofTop + (slot.base ?? base) + Math.sin(tilt) * panel.length * 0.5, slot.z] };
   }), [chosen.panels, layout, roofTop, base, panel.length, tilt]);
 
   return (
@@ -639,7 +651,7 @@ function SceneContent({ plan, roof, site, lat, season, clock, onHour, crewCtl, o
       {/* soft ground shadow under the house: drawn once, and again only when the house or its neighbours change */}
       <ContactShadows key={`${roof.width}:${roof.length}:${roofTop}:${buildings.map((b) => `${b.x.toFixed(1)},${b.z.toFixed(1)},${b.w},${b.d}`).join(';')}`} frames={1} position={[0, 0.04, 0]} opacity={0.3} scale={70} blur={2.4} far={14} />
       <HouseModel roof={roof} site={site} obstacles={layout.obstacles} failing={failing} litRef={lit} />
-      {elevated && !editing && <ElevatedFrame layout={layout} roofTop={roofTop} panel={panel} />}
+      {elevated && !editing && <ElevatedFrame layout={layout} roofTop={roofTop} />}
       {editing && (
         <RoofEditor
           layout={layout} roof={roof} roofTop={roofTop}
@@ -652,13 +664,13 @@ function SceneContent({ plan, roof, site, lat, season, clock, onHour, crewCtl, o
 
       {!editing && targets.map((t, i) => (
         <Panel key={i} index={i} slot={t.slot} overflow={t.overflow} panel={panel} installedRef={installedRef}
-          glow={glow} structure={structure} roofTop={roofTop} seed={i * 7 + 3} realistic={rich} tilt={tilt}
+          glow={glow} structure={structure} roofTop={roofTop} seed={i * 7 + 3} realistic={rich} tilt={tilt} turnY={turnY}
           shadeRef={shadeNow} heat={shadeMap && plan.shading.panelHourly ? plan.shading.perPanel[i] ?? 0 : null} />
       ))}
       {!editing && (
       <InstallCrew
         targets={targets} panel={panel} roof={roof} roofTop={roofTop} parapetH={site.parapetH}
-        installedRef={installedRef} ctl={crewCtl} onProgress={report} depth={layout.depth} realistic={rich} tilt={tilt}
+        installedRef={installedRef} ctl={crewCtl} onProgress={report} depth={layout.depth} realistic={rich} tilt={tilt} turnY={turnY}
       />
       )}
     </>

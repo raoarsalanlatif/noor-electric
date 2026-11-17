@@ -2,7 +2,8 @@ import { APPLIANCE_MAP, PROFILES } from './appliances';
 import { PLANNER_CONFIG as CFG, PANEL_OPTIONS, INVERTER_SIZES, CITIES, DEFAULT_SITE, STRUCTURES, STRUCTURE_ORDER } from './config';
 import { dailyShape, seasonOf, sunFor } from '../three/sun';
 import { tiltRad, tiltDeg, REF_TILT_DEG } from '../three/dims';
-import { computeShading, facingLabel, facingOf } from './shading';
+import { computeShading, facingOf } from './shading';
+import { arrayFrame, houseLayout, bestTurn, panelTurn, compassName, SIDES } from './frame';
 
 const DIVERSITY = 0.8; // not every appliance switches on at the same instant
 
@@ -69,7 +70,7 @@ export function roofObstacles(roof, site = DEFAULT_SITE) {
     if (o.type === 'room') return { ...o, onTop: 0, top: o.h };
     const host = rooms.find((r) => Math.abs(o.x - r.x) < r.w / 2 && Math.abs(o.z - r.z) < r.d / 2 && o.w <= r.w && o.d <= r.d);
     const onTop = host ? host.h : 0;
-    return { ...o, onTop, top: (host ? onTop + 0.16 : 0) + o.h };
+    return { ...o, onTop, hostId: host ? host.id : null, top: (host ? onTop + 0.16 : 0) + o.h };
   });
 }
 
@@ -109,6 +110,34 @@ export function winterRowGap(lat, panel, site = DEFAULT_SITE) {
   }, 0);
 }
 
+const ROOM_FRAME = 0.15; // low frame used on top of a room (metres at the front edge)
+const ROOM_EDGE = 0.2; // kept clear along the edges of the room's roof
+
+/** Panel spots on top of a room, clear of anything standing on it (a water tank, for example). */
+function roomTopSlots(room, obstacles, colW, depth, pitch) {
+  const cols = Math.floor((room.w - 2 * ROOM_EDGE + CFG.panelGap) / colW);
+  const usableD = room.d - 2 * ROOM_EDGE;
+  if (cols < 1 || usableD < depth) return [];
+  const rows = Math.floor((usableD - depth) / pitch) + 1;
+  const onIt = obstacles.filter((o) => o.hostId === room.id).map((o) => ({ ...o, top: o.h }));
+  const keep = keepOutZones(onIt, { key: 'room', frontH: ROOM_FRAME });
+  const hits = (x, z) => keep.some((k) => x + colW / 2 > k.x0 && x - colW / 2 < k.x1 && z + depth / 2 > k.z0 && z - depth / 2 < k.z1);
+  const startX = room.x - ((cols - 1) * colW) / 2;
+  const startZ = room.z - ((rows - 1) * pitch) / 2;
+  const out = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const x = startX + c * colW; const z = startZ + r * pitch;
+      if (!hits(x, z)) out.push({ x, z, base: room.h + ROOM_FRAME, onRoom: room.id });
+    }
+  }
+  return out;
+}
+
+/**
+ * Panel spots on a roof. Works in array axes: +z is the side the panels lean towards, which is the
+ * front of the house unless the roof and site were turned first (see frame.js).
+ */
 export function roofLayout(roof, panel, site = DEFAULT_SITE, structureKey = 'L2', lat = 32) {
   const structure = STRUCTURES[structureKey] || STRUCTURES.L2;
   const elevated = structure.key === 'elevated';
@@ -129,24 +158,29 @@ export function roofLayout(roof, panel, site = DEFAULT_SITE, structureKey = 'L2'
   const keepOuts = keepOutZones(obstacles, structure);
   const hits = (x, z) => keepOuts.some((k) => x + colW / 2 > k.x0 && x - colW / 2 < k.x1 && z + depth / 2 > k.z0 && z - depth / 2 < k.z1);
 
-  const slots = [];
+  // `base` is the height of the panel's low front edge above the roof
+  const roofSlots = [];
   let rows = 0;
   for (let z = -roof.length / 2 + sOther + depth / 2; z <= roof.length / 2 - sFront - depth / 2 + 1e-6; z += pitch) {
     rows += 1;
     for (let c = 0; c < cols; c++) {
       const x = startX + c * colW;
-      if (!hits(x, z)) slots.push({ x, z });
+      if (!hits(x, z)) roofSlots.push({ x, z, base: structure.frontH });
     }
   }
+  // panels on top of a room come first: that is where the installer starts, to save roof space
+  const roomSlots = obstacles.filter((o) => o.type === 'room' && o.panelsOnTop).flatMap((room) => roomTopSlots(room, obstacles, colW, depth, pitch));
+  const slots = [...roomSlots, ...roofSlots];
   const ovCols = cols || 3;
   const ovStart = -((ovCols - 1) * colW) / 2;
   const overflowSlot = (k) => ({
+    base: structure.frontH,
     x: ovStart + (k % ovCols) * colW,
     z: roof.length / 2 + 0.4 + depth / 2 + Math.floor(k / ovCols) * pitch,
   });
   return {
     structure, cols, rows, pitch, colW, depth, sFront, sOther, rowGap, winterSafe,
-    slots, obstacles, keepOuts, overflowSlot,
+    slots, obstacles, keepOuts, overflowSlot, onRooms: roomSlots.length,
     maxPanels: slots.length,
     footprint: pitch * colW,
     roofArea: roof.width * roof.length,
@@ -227,8 +261,11 @@ export function computePlan(input) {
   const requiredKW = dailyKWh / (sunHours * CFG.performanceRatio);
   const panelsNeeded = Math.ceil((requiredKW * 1000) / panel.watts);
   const panelsWanted = mode === 'custom' ? custom.panels : panelsNeeded;
-  const structurePick = chooseStructure(roof, panel, site, panelsWanted, city.lat);
-  const { layout } = structurePick.picked;
+  // the panels may lean towards any side of the roof; the layout and shade are worked out in the array's own axes
+  const frame = arrayFrame(roof, site);
+  const structurePick = chooseStructure(frame.roof, panel, frame.site, panelsWanted, city.lat);
+  const arrayLayout = structurePick.picked.layout;
+  const layout = houseLayout(arrayLayout, frame);
   const structure = layout.structure;
   const areaNeeded = panelsNeeded * layout.footprint + 2 * CFG.roofSetback * (roof.width + roof.length);
 
@@ -249,7 +286,9 @@ export function computePlan(input) {
   const overflow = Math.max(0, chosen.panels - layout.maxPanels);
   const systemKW = (installed * panel.watts) / 1000;
   // surrounding buildings and the direction the house faces (no effect on a south-facing house with open sky)
-  const shading = computeShading({ roof, site, layout, panel, installed, lat: city.lat, season });
+  const inArray = computeShading({ roof: frame.roof, site: frame.site, layout: arrayLayout, panel, installed, lat: city.lat, season });
+  // `facing` stays the direction of the house front; `bearing` is the direction the panels lean
+  const shading = { ...inArray, facing: facingOf(site), bearing: frame.bearing, buildings: inArray.buildings.map(frame.box) };
   const solarKwArray = shading.active ? shape.map((s, k) => s * systemKW * shading.factor[k]) : shape.map((s) => s * systemKW);
   // the inverter can not deliver more than its rating: anything above it is clipped (lost)
   const cap = chosen.inverterKW > 0 ? chosen.inverterKW : Infinity;
@@ -340,12 +379,12 @@ export function computePlan(input) {
     });
   }
   if (shading.orientPct <= -5) {
-    const turnedAway = shading.facing !== 180;
+    const turnedAway = shading.bearing !== 180;
     issues.push({
       type: 'facing', severity: 'warn',
-      title: turnedAway ? `Roof faces ${facingLabel(shading.facing).toLowerCase()}` : `Panels tilted ${tiltDeg(site)}°`,
+      title: turnedAway ? `Panels face ${compassName(shading.bearing)}` : `Panels tilted ${tiltDeg(site)}°`,
       detail: turnedAway
-        ? `Panels that lean ${facingLabel(shading.facing).toLowerCase()} instead of south make about ${Math.round(-shading.orientPct)}% less energy.`
+        ? `Panels that lean ${compassName(shading.bearing)} instead of south make about ${Math.round(-shading.orientPct)}% less energy.`
         : `At ${tiltDeg(site)}° the panels make about ${Math.round(-shading.orientPct)}% less energy in this season than at ${REF_TILT_DEG}°.`,
     });
   }
@@ -369,7 +408,7 @@ export function computePlan(input) {
     });
     const big = PANEL_OPTIONS[PANEL_OPTIONS.length - 1];
     if (big.watts !== panel.watts) {
-      const bigLayout = roofLayout(roof, big, site, structure.key, city.lat);
+      const bigLayout = roofLayout(frame.roof, big, frame.site, structure.key, city.lat);
       const bigPct = Math.min(100, Math.round(((bigLayout.maxPanels * (big.watts / 1000) * sunHours * CFG.performanceRatio) / dailyKWh) * 100));
       if (bigPct > fitPct) fixes.push({ title: `Use ${big.watts} W panels`, detail: `Higher-wattage panels raise coverage to about ${bigPct}%.`, action: { panelWatts: big.watts } });
     }
@@ -382,6 +421,9 @@ export function computePlan(input) {
     const newKWh = sum(buildLoadCurve(swapped).kw);
     const pct = Math.round((1 - newKWh / dailyKWh) * 100);
     if (pct > 5) fixes.push({ title: 'Switch to inverter ACs', detail: `Replacing ${nonInvAC} non-inverter AC${nonInvAC > 1 ? 's' : ''} cuts your daily use by about ${pct}%.`, action: { swapAC: true } });
+  }
+  if (!frame.auto && panelTurn(site) !== bestTurn(site)) {
+    fixes.push({ title: 'Turn the panels towards the sun', detail: `Lean them towards the ${SIDES[bestTurn(site)]} of the house, the side that looks most nearly south.`, action: { panelDir: 'auto' } });
   }
   if (shading.sources.rows >= 3 && !layout.winterSafe) {
     fixes.push({ title: 'Use winter-safe row spacing', detail: 'Opens the rows so none shades the next around midday in December. Fewer panels fit.', action: { rowSpacing: 'winter' } });
@@ -398,7 +440,7 @@ export function computePlan(input) {
   }
 
   return {
-    city, panel, layout, sunHours, season, site,
+    city, panel, layout, sunHours, season, site, panelDirAuto: frame.auto,
     structure, structureCost,
     structureAuto: !site.structure || site.structure === 'auto',
     structureOptions: structurePick.options.map(({ key, structure: st, maxPanels, fits }) => ({

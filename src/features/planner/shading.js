@@ -161,10 +161,12 @@ export function computeShading({ roof, site, layout, panel, installed, lat, seas
   if (!turned && !slots.length) return base;
 
   const weights = dailyShape(lat, season); // irradiance share of each hour
-  const yc = panelHeight(site, layout, panel);
+  // height of the middle of each panel: panels on top of a room sit higher than those on the roof
+  const rise = Math.sin(tilt) * panel.length * 0.5;
+  const yOf = (s) => houseHeight(site) + (s.base ?? layout.structure.frontH) + rise;
   const cosT = Math.cos(tilt); const sinT = Math.sin(tilt);
   const normal = [0, cosT, sinT]; // panels lean towards the front of the house
-  const points = slots.map((s) => samplePoints(s, panel, yc, tilt));
+  const points = slots.map((s) => samplePoints(s, panel, yOf(s), tilt));
   const towers = buildings.map((b) => box(b.x, b.z, b.w, b.d, 0, b.h));
   const onRoof = slots.length ? roofBoxes(roof, site, layout) : [];
   // only the rows in front of a panel can shade it
@@ -191,7 +193,7 @@ export function computeShading({ roof, site, layout, panel, installed, lat, seas
           let cause = null;
           if (towers.some((b) => hitsBox(p, dir, b.lo, b.hi))) cause = 'buildings';
           else if (onRoof.some((b) => hitsBox(p, dir, b.lo, b.hi))) cause = 'roof';
-          else if (inFront[i].some((o) => hitsPanel(p, dir, o, yc, panel, normal, cosT, sinT))) cause = 'rows';
+          else if (inFront[i].some((o) => hitsPanel(p, dir, o, yOf(o), panel, normal, cosT, sinT))) cause = 'rows';
           if (cause) { by[cause] += 1; panelHits[i] += 1; }
         });
       });

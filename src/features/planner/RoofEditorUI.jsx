@@ -43,7 +43,7 @@ const Inspector = styled.div`
 
 const num = (v, min, max) => Math.min(max, Math.max(min, Number(v) || min));
 
-export function EditorToolbar({ tool, setTool, onDone, structureLabel, fits, fullscreen, onFullscreen }) {
+export function EditorToolbar({ tool, setTool, onDone, structureLabel, fits, fullscreen, onFullscreen, panelSide, onTurnPanels }) {
   return (
     <Bar>
       <span className="title">Roof editor · {structureLabel}: <span style={{ color: t.orange }}>{fits} panels fit</span></span>
@@ -56,6 +56,11 @@ export function EditorToolbar({ tool, setTool, onDone, structureLabel, fits, ful
       <button type="button" className={tool === 'building' ? 'on' : ''} onClick={() => setTool(tool === 'building' ? null : 'building')} title="Place a nearby building to see its shadow">
         <FontAwesomeIcon icon={faBuilding} /><span>{SURROUNDING.label}</span>
       </button>
+      {onTurnPanels && (
+        <button type="button" onClick={onTurnPanels} title={`Panels lean towards the ${panelSide} of the house. Click to turn them to the next side.`}>
+          <FontAwesomeIcon icon={faRotate} /><span>Turn panels</span>
+        </button>
+      )}
       {onFullscreen && (
         <button type="button" className="fs" onClick={onFullscreen} aria-label={fullscreen ? 'Exit full screen' : 'View full screen'} title={fullscreen ? 'Exit full screen (Esc)' : 'Full screen'}>
           <FontAwesomeIcon icon={fullscreen ? faCompress : faExpand} />
@@ -97,6 +102,12 @@ export function EditorInspector({ item, tool, onChange, onRotate, onDuplicate, o
         <>{field('w', 'Diameter', 0.5, 3)}{field('h', 'Height', 0.5, 3)}</>
       ) : (
         <>{field('w', 'Width', 0.3, 12)}{field('d', 'Depth', 0.3, 12)}{field('h', 'Height', 0.2, 4)}</>
+      )}
+      {item.type === 'room' && (
+        <label title="Start the panels on the roof of this room to save space on the main roof">
+          <input type="checkbox" style={{ width: 'auto' }} checked={Boolean(item.panelsOnTop)} onChange={(e) => onChange({ panelsOnTop: e.target.checked })} />
+          Panels on top
+        </label>
       )}
       <span className="acts">
         {item.type !== 'tank' && <button type="button" onClick={onRotate}><FontAwesomeIcon icon={faRotate} /> Rotate</button>}
