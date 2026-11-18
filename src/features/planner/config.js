@@ -37,15 +37,20 @@ export const PLANNER_CONFIG = {
  * Mounting structures. Heights are in metres, cost is PKR per kW of panels (indicative).
  * - L2 / L3: low frames bolted to the roof. Panels must keep clear of tanks, rooms, ACs and their shadows.
  *   L3 sits higher, so short objects and parapet walls shade it less.
- * - Elevated: tall steel structure that spans over tanks, ACs and the parapet. Only taller objects
- *   (e.g. a stair room) block it.
+ * - Elevated: tall steel structure with a level frame that spans over tanks, ACs and the parapet. Only taller
+ *   objects (e.g. a stair room) block it. Panels sit on it in tilted rows with a walkway between them.
+ * - Elevated tilted: the same tall structure with one sloped frame. Panels lie edge to edge up the slope, so
+ *   rows never shade each other. The back gets higher with every row, so a long roof is split into
+ *   separate tables once the back would pass `maxBackH`.
  */
 export const STRUCTURES = {
   L2: { key: 'L2', label: 'L2 frame', short: 'L2', frontH: 0.15, backFt: 2, costPerKW: 9000, desc: 'Low frame, about 2 ft at the back' },
   L3: { key: 'L3', label: 'L3 frame', short: 'L3', frontH: 0.35, backFt: 3, costPerKW: 12000, desc: 'Raised frame, about 3 ft at the back' },
-  elevated: { key: 'elevated', label: 'Elevated structure', short: 'Elevated', frontH: 2.45, backFt: 10, costPerKW: 32000, desc: 'Steel structure 8–10 ft high, spans over tanks and ACs' },
+  elevated: { key: 'elevated', label: 'Elevated structure', short: 'Elevated', elevated: true, frontH: 2.45, backFt: 10, costPerKW: 32000, desc: 'Steel structure 8–10 ft high, spans over tanks and ACs' },
+  // costPerKW here is a placeholder (more steel than the level frame): set it from your own price list
+  elevatedTilt: { key: 'elevatedTilt', label: 'Elevated tilted structure', short: 'Tilted', elevated: true, tilted: true, frontH: 2.45, maxBackH: 4.9, backFt: 16, costPerKW: 36000, desc: 'One sloped steel canopy, 8 ft at the front, panels edge to edge' },
 };
-export const STRUCTURE_ORDER = ['L2', 'L3', 'elevated'];
+export const STRUCTURE_ORDER = ['L2', 'L3', 'elevated', 'elevatedTilt'];
 
 /** Things a customer can place on the roof in the 3D editor. Sizes in metres (w = east–west, d = north–south). */
 export const ROOF_ITEMS = {
@@ -118,7 +123,7 @@ export const SURROUNDING = { label: 'Nearby building', short: 'Building', w: 9, 
 export const DEFAULT_SITE = {
   storeys: 2,
   parapetH: 0.9, // metres
-  structure: 'auto', // 'auto' picks the cheapest structure that fits; or 'L2' | 'L3' | 'elevated'
+  structure: 'auto', // 'auto' picks the best-value structure that fits; or 'L2' | 'L3' | 'elevated' | 'elevatedTilt'
   items: defaultRoofItems({ width: 10, length: 14 }),
   facing: 180, // the front of the house faces south
   // Side of the roof the panels lean towards: 'auto' = the side that looks most nearly south,

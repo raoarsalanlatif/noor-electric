@@ -60,7 +60,7 @@ function Panel({ index, slot, overflow, panel, installedRef, glow, structure, ro
   const cells = useRef();
   const st = useRef({ phase: 'hidden', vy: 0, t: 0 });
   // panels on top of a room sit on their own low frame, whatever the main structure is
-  const elevated = structure.key === 'elevated' && !slot.onRoom;
+  const elevated = Boolean(structure.elevated) && !slot.onRoom;
   const base = slot.base ?? structure.frontH;
   const legs = slot.onRoom ? 0.15 : base;
   const target = useMemo(
@@ -124,39 +124,53 @@ function Panel({ index, slot, overflow, panel, installedRef, glow, structure, ro
 }
 
 /* ----------------------------- elevated frame ----------------------------- */
-function ElevatedFrame({ layout, roofTop }) {
-  const ELEVATED_H = layout.structure.frontH;
-  const onFrame = layout.slots.filter((s) => !s.onRoom); // panels on top of a room have their own frame
-  if (!onFrame.length) return null;
-  const xs = onFrame.map((s) => s.x); const zs = onFrame.map((s) => s.z);
-  const minX = Math.min(...xs) - layout.footX / 2; const maxX = Math.max(...xs) + layout.footX / 2;
-  const minZ = Math.min(...zs) - layout.footZ / 2; const maxZ = Math.max(...zs) + layout.footZ / 2;
-  const cols = [];
-  for (let x = minX; x <= maxX + 0.01; x += Math.max(2.4, (maxX - minX) / 4)) {
-    for (let z = minZ; z <= maxZ + 0.01; z += Math.max(2.6, (maxZ - minZ) / 3)) {
-      // don't plant a column through a room, tank or AC
-      const blocked = layout.obstacles.some((o) => Math.abs(x - o.x) < o.w / 2 + 0.15 && Math.abs(z - o.z) < o.d / 2 + 0.15);
-      if (!blocked) cols.push([x, z]);
-    }
-  }
-  const steel = <meshStandardMaterial color="#8b95a1" metalness={0.7} roughness={0.35} />;
+// Steel under an elevated array. Drawn in array axes (+z = the side the panels lean towards) and turned to
+// the house with the panels. A level frame has one height; a tilted frame is one sloped table per group of rows.
+const steelMat = () => <meshStandardMaterial color="#8b95a1" metalness={0.7} roughness={0.35} />;
+
+function ElevatedFrame({ layout, roofTop, tilt, turnY }) {
+  const slots = layout.array.slots.filter((s) => !s.onRoom); // panels on top of a room have their own frame
+  if (!slots.length) return null;
+  const tables = layout.tilted
+    ? [...new Set(slots.map((s) => s.table))].map((id) => slots.filter((s) => s.table === id))
+    : [slots];
+  // don't plant a column through a room, tank or AC
+  const clear = (x, z) => !layout.array.obstacles.some((o) => Math.abs(x - o.x) < o.w / 2 + 0.15 && Math.abs(z - o.z) < o.d / 2 + 0.15);
+  const slope = layout.tilted ? Math.tan(tilt) : 0;
   return (
-    <group>
-      {cols.map(([x, z], i) => (
-        <mesh key={i} position={[x, roofTop + ELEVATED_H / 2, z]} castShadow>
-          <boxGeometry args={[0.12, ELEVATED_H, 0.12]} />{steel}
-        </mesh>
-      ))}
-      {[minZ, maxZ].map((z) => (
-        <mesh key={z} position={[(minX + maxX) / 2, roofTop + ELEVATED_H, z]} castShadow>
-          <boxGeometry args={[maxX - minX + 0.2, 0.14, 0.14]} />{steel}
-        </mesh>
-      ))}
-      {[minX, maxX].map((x) => (
-        <mesh key={x} position={[x, roofTop + ELEVATED_H, (minZ + maxZ) / 2]} castShadow>
-          <boxGeometry args={[0.14, 0.14, maxZ - minZ + 0.2]} />{steel}
-        </mesh>
-      ))}
+    <group rotation={[0, turnY, 0]}>
+      {tables.map((table, ti) => {
+        const xs = table.map((s) => s.x); const zs = table.map((s) => s.z);
+        const minX = Math.min(...xs) - layout.colW / 2; const maxX = Math.max(...xs) + layout.colW / 2;
+        const minZ = Math.min(...zs) - layout.depth / 2; const maxZ = Math.max(...zs) + layout.depth / 2;
+        // height of the frame above the roof at z: level, or rising from the front edge to the back
+        const heightAt = (z) => layout.structure.frontH + (maxZ - z) * slope;
+        const colXs = []; const colZs = [];
+        for (let x = minX; x <= maxX + 0.01; x += Math.max(2.4, (maxX - minX) / 4)) colXs.push(x);
+        for (let z = minZ; z <= maxZ + 0.01; z += Math.max(2.6, (maxZ - minZ) / 3)) colZs.push(z);
+        const midZ = (minZ + maxZ) / 2; const run = (maxZ - minZ) / Math.cos(layout.tilted ? tilt : 0);
+        return (
+          <group key={ti}>
+            {colXs.flatMap((x) => colZs.filter((z) => clear(x, z)).map((z) => (
+              <mesh key={`${x}:${z}`} position={[x, roofTop + heightAt(z) / 2, z]} castShadow>
+                <boxGeometry args={[0.12, heightAt(z), 0.12]} />{steelMat()}
+              </mesh>
+            )))}
+            {/* beams across the front and back edges */}
+            {[minZ, maxZ].map((z) => (
+              <mesh key={z} position={[(minX + maxX) / 2, roofTop + heightAt(z), z]} castShadow>
+                <boxGeometry args={[maxX - minX + 0.2, 0.14, 0.14]} />{steelMat()}
+              </mesh>
+            ))}
+            {/* beams running front to back: level, or following the slope */}
+            {[minX, maxX].map((x) => (
+              <mesh key={x} position={[x, roofTop + heightAt(midZ), midZ]} rotation={[layout.tilted ? tilt : 0, 0, 0]} castShadow>
+                <boxGeometry args={[0.14, 0.14, run + 0.2]} />{steelMat()}
+              </mesh>
+            ))}
+          </group>
+        );
+      })}
     </group>
   );
 }
@@ -499,9 +513,9 @@ function RoofEditor({ layout, roof, roofTop, tool, selectedId, onPlace, onSelect
 
       {/* panel spots that remain */}
       {layout.slots.map((s, i) => (
-        <mesh key={i} position={[s.x, y + 0.01 + (s.onRoom ? s.base : layout.structure.key === 'elevated' ? layout.structure.frontH : 0), s.z]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
+        <mesh key={i} position={[s.x, y + 0.01 + (s.onRoom || layout.structure.elevated ? s.base : 0), s.z]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
           <planeGeometry args={[slotW, slotD]} />
-          <meshBasicMaterial color="#60a5fa" transparent opacity={layout.structure.key === 'elevated' ? 0.35 : 0.22} depthWrite={false} side={THREE.DoubleSide} />
+          <meshBasicMaterial color="#60a5fa" transparent opacity={layout.structure.elevated ? 0.35 : 0.22} depthWrite={false} side={THREE.DoubleSide} />
         </mesh>
       ))}
 
@@ -607,7 +621,7 @@ function SceneContent({ plan, roof, site, lat, season, clock, onHour, crewCtl, o
   const failing = plan.overflow > 0 && !editing;
   const overloaded = plan.issues.some((i) => i.type === 'inverter');
   const { structure } = plan;
-  const elevated = structure.key === 'elevated';
+  const elevated = Boolean(structure.elevated);
   const base = structure.frontH;
   const tilt = tiltRad(site);
   const turnY = (layout.turn * Math.PI) / 2; // quarter turns towards the side the panels lean to
@@ -651,7 +665,7 @@ function SceneContent({ plan, roof, site, lat, season, clock, onHour, crewCtl, o
       {/* soft ground shadow under the house: drawn once, and again only when the house or its neighbours change */}
       <ContactShadows key={`${roof.width}:${roof.length}:${roofTop}:${buildings.map((b) => `${b.x.toFixed(1)},${b.z.toFixed(1)},${b.w},${b.d}`).join(';')}`} frames={1} position={[0, 0.04, 0]} opacity={0.3} scale={70} blur={2.4} far={14} />
       <HouseModel roof={roof} site={site} obstacles={layout.obstacles} failing={failing} litRef={lit} />
-      {elevated && !editing && <ElevatedFrame layout={layout} roofTop={roofTop} />}
+      {elevated && !editing && <ElevatedFrame layout={layout} roofTop={roofTop} tilt={tilt} turnY={turnY} />}
       {editing && (
         <RoofEditor
           layout={layout} roof={roof} roofTop={roofTop}
