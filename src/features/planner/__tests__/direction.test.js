@@ -1,6 +1,6 @@
 // Panels can lean towards any side of the roof, and can sit on top of a room.
 import { describe, it, expect } from 'vitest';
-import { computePlan } from '../sizing';
+import { computePlan, chooseStructure } from '../sizing';
 import { arrayFrame, bestTurn, panelTurn, sideBearing, compassName } from '../frame';
 import { DEFAULT_LOAD } from '../appliances';
 import { CITIES, DEFAULT_SITE } from '../config';
@@ -142,5 +142,71 @@ describe('panels on top of a room', () => {
       expect(Math.abs(s.x - room.x)).toBeLessThan(room.w / 2);
       expect(Math.abs(s.z - room.z)).toBeLessThan(room.d / 2);
     });
+  });
+});
+
+describe('elevated structures', () => {
+  const tiltedSite = { structure: 'elevatedTilt' };
+
+  it('a tilted frame lays the rows edge to edge on one slope, each row a step higher', () => {
+    const p = withSite(tiltedSite);
+    expect(p.structure.key).toBe('elevatedTilt');
+    expect(p.layout.tilted).toBe(true);
+    const col = p.layout.slots.filter((s) => s.table === 0 && Math.abs(s.x - p.layout.slots[0].x) < 1e-6).sort((a, b) => b.z - a.z);
+    expect(col.length).toBeGreaterThan(1);
+    // front row lowest; rows touch (no walkway) and rise with the tilt
+    expect(col[0].base).toBeCloseTo(p.structure.frontH, 9);
+    for (let i = 1; i < col.length; i++) {
+      expect(col[i - 1].z - col[i].z).toBeCloseTo(p.layout.pitch, 9);
+      expect(col[i].base - col[i - 1].base).toBeCloseTo(p.layout.pitch * Math.tan((15 * Math.PI) / 180), 9);
+    }
+    expect(p.layout.pitch).toBeLessThan(p.layout.depth + 0.1);
+  });
+
+  it('the back of a tilted table stays under the height limit; a long roof gets a second table', () => {
+    const p = withSite(tiltedSite, { roof: { width: 10, length: 24 } });
+    const top = Math.max(...p.layout.slots.map((s) => s.base)) + p.panel.length * Math.sin((15 * Math.PI) / 180);
+    expect(top).toBeLessThanOrEqual(p.structure.maxBackH + 1e-9);
+    expect(new Set(p.layout.slots.map((s) => s.table)).size).toBeGreaterThan(1);
+  });
+
+  it('rows on a tilted frame do not shade each other in December; rows on a level frame do', () => {
+    const custom = { panels: 16, inverterKW: 8, batteryKWh: 0 };
+    const level = withSite({ structure: 'elevated' }, { season: 'winter', mode: 'custom', custom });
+    const tilted = withSite(tiltedSite, { season: 'winter', mode: 'custom', custom });
+    expect(level.shading.sources.rows).toBeGreaterThan(3);
+    expect(tilted.shading.sources.rows).toBeLessThan(1);
+    expect(tilted.solarKWh).toBeGreaterThan(level.solarKWh);
+  });
+
+  it('auto keeps the low frame when it fits: it is the best value', () => {
+    const p = withSite({});
+    expect(p.structureAuto).toBe(true);
+    expect(p.structure.key).toBe('L2');
+    expect(p.structureBest).toBe('L2');
+  });
+
+  it('auto compares the two elevated structures on cost for the energy they make, and takes the better', () => {
+    // enough panels that only an elevated structure fits this cluttered roof
+    const p = computePlan({ ...base, site: DEFAULT_SITE, mode: 'custom', custom: { panels: 24, inverterKW: 12, batteryKWh: 0 } });
+    const { options, best } = chooseStructure(base.roof, p.panel, DEFAULT_SITE, 24, CITIES[0].lat);
+    const fitting = options.filter((o) => o.fits);
+    expect(fitting.map((o) => o.key)).toEqual(['elevated', 'elevatedTilt']);
+    const cheapest = fitting.reduce((a, b) => (b.costPerEnergy < a.costPerEnergy ? b : a));
+    expect(best.key).toBe(cheapest.key);
+    expect(p.structure.key).toBe(cheapest.key);
+  });
+
+  it('auto does not change with the season being viewed', () => {
+    const custom = { panels: 24, inverterKW: 12, batteryKWh: 0 };
+    const keys = ['summer', 'annual', 'winter'].map((season) => computePlan({ ...base, site: DEFAULT_SITE, season, mode: 'custom', custom }).structure.key);
+    expect(new Set(keys).size).toBe(1);
+  });
+
+  it('when nothing fits, auto takes the structure that holds the most panels', () => {
+    const p = computePlan({ ...base, site: DEFAULT_SITE, mode: 'custom', custom: { panels: 60, inverterKW: 30, batteryKWh: 0 } });
+    const most = Math.max(...p.structureOptions.map((o) => o.maxPanels));
+    expect(p.layout.maxPanels).toBe(most);
+    expect(p.overflow).toBe(60 - most);
   });
 });

@@ -198,7 +198,7 @@ const pkrShort = (n) => (n >= 100000 ? `Rs ${(n / 100000).toFixed(n >= 1000000 ?
 function StructurePicker({ site, setSite, plan }) {
   const auto = plan.structureAuto;
   const choose = (key) => setSite({ ...site, structure: key });
-  const bestKey = plan.structureOptions.find((o) => o.fits)?.key;
+  const bestKey = plan.structureBest;
   return (
     <Field>
       <Label>Mounting structure</Label>
@@ -218,7 +218,7 @@ function StructurePicker({ site, setSite, plan }) {
       </StructTable>
       <Hint>
         {auto
-          ? <>Auto picks the cheapest structure that fits the {plan.chosen.panels} panels you need — now <b style={{ color: t.text }}>{plan.structure.label}</b>.</>
+          ? <>Auto picks the best value among the structures that fit the {plan.chosen.panels} panels you need: the lowest cost for the energy it makes over the year. Now <b style={{ color: t.text }}>{plan.structure.label}</b>.</>
           : <>You chose <b style={{ color: t.text }}>{plan.structure.label}</b>. Switch to Auto to let us pick.</>}
         {' '}Structure prices are indicative, per your system size.
       </Hint>

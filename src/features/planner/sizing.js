@@ -76,7 +76,7 @@ export function roofObstacles(roof, site = DEFAULT_SITE) {
 
 /** Area each obstacle keeps free of panels for a given structure (its footprint + walkway + shadow). */
 export function keepOutZones(obstacles, structure) {
-  const elevated = structure.key === 'elevated';
+  const elevated = Boolean(structure.elevated);
   return obstacles.map((o) => {
     // an elevated structure spans over anything comfortably below its frame
     if (elevated && o.top < structure.frontH - 0.25) return null;
@@ -140,11 +140,14 @@ function roomTopSlots(room, obstacles, colW, depth, pitch) {
  */
 export function roofLayout(roof, panel, site = DEFAULT_SITE, structureKey = 'L2', lat = 32) {
   const structure = STRUCTURES[structureKey] || STRUCTURES.L2;
-  const elevated = structure.key === 'elevated';
+  const elevated = Boolean(structure.elevated);
+  const tilted = Boolean(structure.tilted);
   const depth = panel.length * Math.cos(tiltRad(site));
   const winterSafe = site.rowSpacing === 'winter';
-  const rowGap = winterSafe ? Math.max(CFG.rowGap, winterRowGap(lat, panel, site)) : CFG.rowGap;
-  const pitch = depth + rowGap;
+  const winterGap = winterRowGap(lat, panel, site);
+  // on a tilted frame the rows lie edge to edge up one slope; otherwise each row stands alone with a gap behind it
+  let rowGap = winterSafe ? Math.max(CFG.rowGap, winterGap) : CFG.rowGap;
+  const pitch = tilted ? depth + CFG.panelGap : depth + rowGap;
   const colW = panel.width + CFG.panelGap;
   // parapet walls shade the panels behind them, mostly on the sunny (front) side;
   // a higher frame clears more of the wall, an elevated one clears it completely
@@ -161,11 +164,32 @@ export function roofLayout(roof, panel, site = DEFAULT_SITE, structureKey = 'L2'
   // `base` is the height of the panel's low front edge above the roof
   const roofSlots = [];
   let rows = 0;
-  for (let z = -roof.length / 2 + sOther + depth / 2; z <= roof.length / 2 - sFront - depth / 2 + 1e-6; z += pitch) {
-    rows += 1;
-    for (let c = 0; c < cols; c++) {
-      const x = startX + c * colW;
-      if (!hits(x, z)) roofSlots.push({ x, z, base: structure.frontH });
+  const zEnd = roof.length / 2 - sFront - depth / 2 + 1e-6;
+  if (tilted) {
+    // One sloped table: every row back from the front sits one step higher. When the back edge would pass
+    // the structure's height limit, a new table starts behind a gap wide enough to stay out of its shadow.
+    const stepUp = pitch * Math.tan(tiltRad(site));
+    const perTable = Math.max(1, Math.floor((structure.maxBackH - structure.frontH) / (panel.length * Math.sin(tiltRad(site)))));
+    let z = -roof.length / 2 + sOther + depth / 2;
+    for (let table = 0; z <= zEnd; table++) {
+      const n = Math.min(perTable, Math.floor((zEnd - z) / pitch) + 1);
+      for (let i = 0; i < n; i++) {
+        rows += 1;
+        for (let c = 0; c < cols; c++) {
+          const x = startX + c * colW; const rz = z + i * pitch;
+          if (!hits(x, rz)) roofSlots.push({ x, z: rz, base: structure.frontH + (n - 1 - i) * stepUp, table });
+        }
+      }
+      rowGap = Math.max(CFG.rowGap, winterGap * n);
+      z += (n - 1) * pitch + depth + rowGap;
+    }
+  } else {
+    for (let z = -roof.length / 2 + sOther + depth / 2; z <= zEnd; z += pitch) {
+      rows += 1;
+      for (let c = 0; c < cols; c++) {
+        const x = startX + c * colW;
+        if (!hits(x, z)) roofSlots.push({ x, z, base: structure.frontH });
+      }
     }
   }
   // panels on top of a room come first: that is where the installer starts, to save roof space
@@ -179,7 +203,7 @@ export function roofLayout(roof, panel, site = DEFAULT_SITE, structureKey = 'L2'
     z: roof.length / 2 + 0.4 + depth / 2 + Math.floor(k / ovCols) * pitch,
   });
   return {
-    structure, cols, rows, pitch, colW, depth, sFront, sOther, rowGap, winterSafe,
+    structure, cols, rows, pitch, colW, depth, sFront, sOther, rowGap, winterSafe, tilted,
     slots, obstacles, keepOuts, overflowSlot, onRooms: roomSlots.length,
     maxPanels: slots.length,
     footprint: pitch * colW,
@@ -188,16 +212,55 @@ export function roofLayout(roof, panel, site = DEFAULT_SITE, structureKey = 'L2'
 }
 
 /**
- * Compare all structures for this roof and pick one.
- * 'auto' = the cheapest structure that fits the panels we need; if none fits, the one that fits the most.
+ * Energy a kW of panels makes over the year on this layout, after shade, relative to an unshaded reference
+ * panel. Summer and winter are averaged, so the answer does not change with the season the customer is viewing.
  */
-export function chooseStructure(roof, panel, site, panelsWanted, lat = 32) {
+function yearEnergyPerKW(roof, panel, site, layout, installed, lat) {
+  if (!installed) return 0;
+  return ['summer', 'winter'].reduce((total, season) => {
+    const { factor } = computeShading({ roof, site, layout, panel, installed, lat, season });
+    const weights = dailyShape(lat, season);
+    return total + (seasonOf(season).sunFactor * weights.reduce((s, w, k) => s + w * factor[k], 0)) / 2;
+  }, 0);
+}
+
+/**
+ * Compare all structures for this roof and pick one.
+ *
+ * 'auto' = the best value among the structures that fit the panels we need: the lowest cost for each unit of
+ * energy over the year. A dearer structure wins only when it earns its price back in energy, for example a
+ * tilted frame whose rows do not shade each other. If none fits, auto takes the one that fits the most panels.
+ * Pass `value: false` to skip the energy comparison when the structure is already decided.
+ */
+// The comparison traces shade for every structure, so recent answers are kept: most input changes
+// (a slider, the time of day, the season) leave the roof and the panel count as they were.
+const structureCache = new Map();
+
+export function chooseStructure(roof, panel, site, panelsWanted, lat = 32, { value = true } = {}) {
+  const cacheKey = JSON.stringify([roof, panel, site, panelsWanted, lat, value]);
+  if (structureCache.has(cacheKey)) return structureCache.get(cacheKey);
+  const result = compareStructures(roof, panel, site, panelsWanted, lat, value);
+  if (structureCache.size >= 24) structureCache.delete(structureCache.keys().next().value);
+  structureCache.set(cacheKey, result);
+  return result;
+}
+
+function compareStructures(roof, panel, site, panelsWanted, lat, value) {
   const options = STRUCTURE_ORDER.map((key) => {
     const layout = roofLayout(roof, panel, site, key, lat);
-    return { key, structure: STRUCTURES[key], layout, maxPanels: layout.maxPanels, fits: layout.maxPanels >= panelsWanted };
+    const structure = STRUCTURES[key];
+    const o = { key, structure, layout, maxPanels: layout.maxPanels, fits: layout.maxPanels >= panelsWanted, energy: null, costPerEnergy: null };
+    if (value) {
+      o.energy = yearEnergyPerKW(roof, panel, site, layout, Math.min(panelsWanted, layout.maxPanels), lat);
+      o.costPerEnergy = o.energy > 0 ? (CFG.costPerKW + structure.costPerKW) / o.energy : Infinity;
+    }
+    return o;
   });
-  const best = options.find((o) => o.fits)
-    || options.reduce((a, b) => (b.maxPanels > a.maxPanels ? b : a), options[0]);
+  const cheaper = (a, b) => (value ? b.costPerEnergy < a.costPerEnergy - 1e-9 : false);
+  const fitting = options.filter((o) => o.fits);
+  const best = fitting.length
+    ? fitting.reduce((a, b) => (cheaper(a, b) ? b : a))
+    : options.reduce((a, b) => (b.maxPanels > a.maxPanels || (b.maxPanels === a.maxPanels && cheaper(a, b)) ? b : a));
   const picked = site.structure && site.structure !== 'auto' ? options.find((o) => o.key === site.structure) || best : best;
   return { picked, best, options };
 }
@@ -249,7 +312,7 @@ const sum = (arr) => arr.reduce((a, b) => a + b, 0);
  * Main entry: everything the UI needs, recomputed on every input change.
  */
 export function computePlan(input) {
-  const { load, cityId, roof, panelWatts, mode, custom, withBattery, offGrid, location, season = 'annual', site = DEFAULT_SITE } = input;
+  const { load, cityId, roof, panelWatts, mode, custom, withBattery, offGrid, location, season = 'annual', site = DEFAULT_SITE, compareStructures = true } = input;
   const city = location || CITIES.find((c) => c.id === cityId) || CITIES[0];
   const sunHours = city.sunHours * seasonOf(season).sunFactor;
   const panel = PANEL_OPTIONS.find((p) => p.watts === panelWatts) || PANEL_OPTIONS[1];
@@ -263,7 +326,7 @@ export function computePlan(input) {
   const panelsWanted = mode === 'custom' ? custom.panels : panelsNeeded;
   // the panels may lean towards any side of the roof; the layout and shade are worked out in the array's own axes
   const frame = arrayFrame(roof, site);
-  const structurePick = chooseStructure(frame.roof, panel, frame.site, panelsWanted, city.lat);
+  const structurePick = chooseStructure(frame.roof, panel, frame.site, panelsWanted, city.lat, { value: compareStructures });
   const arrayLayout = structurePick.picked.layout;
   const layout = houseLayout(arrayLayout, frame);
   const structure = layout.structure;
@@ -443,6 +506,7 @@ export function computePlan(input) {
     city, panel, layout, sunHours, season, site, panelDirAuto: frame.auto,
     structure, structureCost,
     structureAuto: !site.structure || site.structure === 'auto',
+    structureBest: structurePick.best.key,
     structureOptions: structurePick.options.map(({ key, structure: st, maxPanels, fits }) => ({
       key, label: st.label, short: st.short, desc: st.desc, maxPanels, fits,
       cost: Math.min(maxPanels, panelsWanted) * (panel.watts / 1000) * st.costPerKW,

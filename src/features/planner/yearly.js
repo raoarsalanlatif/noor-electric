@@ -32,6 +32,7 @@ export function yearlyOutlook(input, plan) {
   const fixed = {
     ...input,
     mode: 'custom',
+    compareStructures: false, // the structure is already chosen
     withBattery: plan.chosen.batteryKWh > 0,
     custom: { panels: plan.chosen.panels, inverterKW: plan.chosen.inverterKW, batteryKWh: plan.chosen.batteryKWh },
     site: { ...plan.site, structure: plan.structure.key },

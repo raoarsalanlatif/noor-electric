@@ -71,6 +71,8 @@ export function houseLayout(layout, frame) {
   return {
     ...layout,
     turn: frame.turn, side: frame.side, bearing: frame.bearing,
+    // the same panel spots and roof items in array axes, for drawing the frame the panels sit on
+    array: { slots: layout.slots, obstacles: layout.obstacles },
     // footprint of one panel on the roof, along the house's x and z
     footX: frame.odd ? layout.depth : layout.colW - 0.03,
     footZ: frame.odd ? layout.colW - 0.03 : layout.depth,

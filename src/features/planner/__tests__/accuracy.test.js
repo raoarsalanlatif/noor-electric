@@ -60,7 +60,7 @@ describe('shade from things on the roof', () => {
     const open = computePlan({ ...base, site: clear });
     expect(open.shading.sources.roof).toBe(0);
     const room = { id: 'r', type: 'room', x: 0, z: 5, w: 6, d: 3, h: 3 };
-    const blocked = computePlan({ ...base, season: 'winter', site: { ...clear, items: [room] } });
+    const blocked = computePlan({ ...base, season: 'winter', site: { ...clear, structure: 'L2', items: [room] } });
     expect(blocked.shading.sources.roof).toBeGreaterThan(0);
   });
 });
