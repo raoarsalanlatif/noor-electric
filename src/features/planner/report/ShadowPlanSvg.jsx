@@ -69,6 +69,9 @@ export default function ShadowPlanSvg({ plan, roof, hour, season = 'winter', wid
       ))}
       {/* roof */}
       <rect x={X(-W / 2)} y={Y(-L / 2)} width={W * s} height={L * s} fill={C.roof} stroke={C.parapet} strokeWidth="2.5" />
+      {(layout.wings || []).map((g) => (
+        <rect key={g.id} x={X(g.x - g.w / 2)} y={Y(g.z - g.d / 2)} width={g.w * s} height={g.d * s} fill={C.roof} stroke={C.parapet} strokeWidth="2.5" />
+      ))}
       {/* panels */}
       {panels.map((p, i) => {
         const loss = (losses || shading.perPanel)[i] || 0;
