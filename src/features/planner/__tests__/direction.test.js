@@ -3,7 +3,8 @@ import { describe, it, expect } from 'vitest';
 import { computePlan, chooseStructure } from '../sizing';
 import { arrayFrame, bestTurn, panelTurn, sideBearing, compassName } from '../frame';
 import { DEFAULT_LOAD } from '../appliances';
-import { CITIES, DEFAULT_SITE } from '../config';
+import { CITIES, DEFAULT_SITE, STRUCTURES, structureFor } from '../config';
+import { houseWings, parapetRuns } from '../roofShape';
 
 const clear = { ...DEFAULT_SITE, items: [], parapetH: 0 };
 const base = {
@@ -208,5 +209,86 @@ describe('elevated structures', () => {
     const most = Math.max(...p.structureOptions.map((o) => o.maxPanels));
     expect(p.layout.maxPanels).toBe(most);
     expect(p.overflow).toBe(60 - most);
+  });
+});
+
+describe('roof extensions', () => {
+  const tail = { id: 'w1', x: 0, z: -11, w: 4, d: 5 }; // sticks out of the back of a 10 x 14 roof
+
+  it('an extension is moved to join a side of the main roof without overlapping it', () => {
+    const [g] = houseWings(base.roof, { wings: [{ id: 'a', x: 1, z: 2, w: 4, d: 5 }] });
+    const touchesX = Math.abs(Math.abs(g.x) - (base.roof.width / 2 + g.w / 2)) < 1e-9;
+    const touchesZ = Math.abs(Math.abs(g.z) - (base.roof.length / 2 + g.d / 2)) < 1e-9;
+    expect(touchesX || touchesZ).toBe(true);
+    const [back] = houseWings(base.roof, { wings: [tail] });
+    expect(back.z).toBeCloseTo(-(7 + 2.5), 9);
+    expect(back.x).toBe(0);
+  });
+
+  it('adds panel spots on the extension and counts its area', () => {
+    const plain = withSite({});
+    const p = withSite({ wings: [tail] });
+    expect(p.layout.onWings).toBeGreaterThan(0);
+    expect(p.layout.maxPanels).toBe(plain.layout.maxPanels + p.layout.onWings);
+    expect(p.layout.roofArea).toBeCloseTo(10 * 14 + 4 * 5, 9);
+    const g = p.layout.wings[0];
+    p.layout.slots.filter((s) => s.wing === 'w1').forEach((s) => {
+      expect(Math.abs(s.x - g.x) + p.layout.footX / 2).toBeLessThanOrEqual(g.w / 2 + 1e-9);
+      expect(Math.abs(s.z - g.z) + p.layout.footZ / 2).toBeLessThanOrEqual(g.d / 2 + 1e-9);
+    });
+    // the main roof is filled first
+    expect(p.layout.slots.findIndex((s) => s.wing)).toBe(plain.layout.maxPanels);
+  });
+
+  it('comes back in house axes whichever side the panels lean towards', () => {
+    [0, 1, 2, 3].forEach((panelDir) => {
+      const p = withSite({ panelDir, wings: [tail] });
+      const g = p.layout.wings[0];
+      expect([g.x, g.z, g.w, g.d]).toEqual([0, -9.5, 4, 5]);
+      p.layout.slots.filter((s) => s.wing).forEach((s) => {
+        expect(Math.abs(s.x - g.x)).toBeLessThan(g.w / 2);
+        expect(Math.abs(s.z - g.z)).toBeLessThan(g.d / 2);
+      });
+    });
+  });
+
+  it('the parapet wall runs round the whole outline, with no wall where the extension joins', () => {
+    const plainLen = parapetRuns(base.roof, {}).reduce((a, r) => a + r.to - r.from, 0);
+    expect(plainLen).toBeCloseTo(2 * (10 + 14), 6);
+    const runs = parapetRuns(base.roof, { wings: [tail] });
+    const len = runs.reduce((a, r) => a + r.to - r.from, 0);
+    // outline of the combined shape: the rectangle's perimeter plus the two sides of the tail
+    expect(len).toBeCloseTo(2 * (10 + 14) + 2 * 5, 6);
+    // nothing crosses the join at z = -7 between x = -2 and x = 2
+    const crossing = runs.filter((r) => r.along === 'x' && Math.abs(r.at + 7) < 1e-9 && r.from < 2 - 1e-6 && r.to > -2 + 1e-6);
+    expect(crossing).toHaveLength(0);
+  });
+});
+
+describe('pillar height', () => {
+  it('applies only to a structure picked by hand, within its range', () => {
+    expect(structureFor('L2', { structure: 'auto', frontH: 0.5 }).frontH).toBe(STRUCTURES.L2.frontH);
+    expect(structureFor('L2', { structure: 'L2', frontH: 0.5 }).frontH).toBe(0.5);
+    expect(structureFor('L2', { structure: 'L2', frontH: 9 }).frontH).toBe(STRUCTURES.L2.frontRange[1]);
+    expect(structureFor('L3', { structure: 'L2', frontH: 0.5 }).frontH).toBe(STRUCTURES.L3.frontH);
+    const t = structureFor('elevatedTilt', { structure: 'elevatedTilt', frontH: 3 });
+    expect(t.maxBackH - t.frontH).toBeCloseTo(STRUCTURES.elevatedTilt.maxBackH - STRUCTURES.elevatedTilt.frontH, 9);
+  });
+
+  it('a higher frame lifts the panels and clears more of the parapet wall', () => {
+    const site = { ...DEFAULT_SITE, items: [], parapetH: 1.5, structure: 'L2' };
+    const low = computePlan({ ...base, site, season: 'winter' });
+    const high = computePlan({ ...base, site: { ...site, frontH: 0.6 }, season: 'winter' });
+    expect(high.structure.frontH).toBe(0.6);
+    expect(high.layout.slots[0].base).toBe(0.6);
+    expect(high.layout.maxPanels).toBeGreaterThanOrEqual(low.layout.maxPanels);
+    expect(high.shading.sources.roof).toBeLessThanOrEqual(low.shading.sources.roof + 1e-9);
+  });
+
+  it('a taller elevated structure spans over a room the standard one cannot', () => {
+    const room = { id: 'r', type: 'room', x: 0, z: 0, w: 3, d: 3.4, h: 2.7 };
+    const std = withSite({ items: [room], structure: 'elevated' });
+    const tall = withSite({ items: [room], structure: 'elevated', frontH: 3.2 });
+    expect(tall.layout.maxPanels).toBeGreaterThan(std.layout.maxPanels);
   });
 });
