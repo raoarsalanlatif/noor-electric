@@ -5,6 +5,7 @@ import { Edges } from '@react-three/drei';
 import { STOREY_H, SLAB } from './constants';
 import BrandSign from './BrandSign';
 import { plasterTexture, concreteTexture, tankTexture, acGrillTexture } from './textures';
+import { parapetRuns, runBox } from '../planner/roofShape';
 
 
 function Window({ position, rotation, w = 1.4, h = 1.5, matRef }) {
@@ -34,7 +35,7 @@ function Window({ position, rotation, w = 1.4, h = 1.5, matRef }) {
  * A typical Pakistani house: plastered walls, floor bands, windows, a porch,
  * parapet walls, an optional stair room (mumty), water tank and AC outdoor units.
  */
-export default function HouseModel({ roof, site, obstacles = [], failing = false, litRef }) {
+export default function HouseModel({ roof, site, obstacles = [], wings = [], failing = false, litRef }) {
   const W = roof.width; const L = roof.length;
   const H = site.storeys * STOREY_H;
   const winMats = useRef([]);
@@ -79,6 +80,8 @@ export default function HouseModel({ roof, site, obstacles = [], failing = false
   }, [W, L, site.storeys]);
   const doorX = -W / 2 + (Math.floor(Math.max(1, Math.floor(W / 2.7)) / 2) + 0.5) * (W / Math.max(1, Math.floor(W / 2.7)));
   const ph = site.parapetH;
+  // parapet walls follow the outer edge of the whole roof, extensions included
+  const walls = useMemo(() => parapetRuns(roof, { wings }).map((run) => runBox(run, 0.2, 1)), [roof, wings]);
 
   return (
     <group>
@@ -91,6 +94,19 @@ export default function HouseModel({ roof, site, obstacles = [], failing = false
           <boxGeometry args={[W + 0.14, 0.2, L + 0.14]} />
           <meshStandardMaterial color="#c9b79c" roughness={0.8} />
         </mesh>
+      ))}
+      {/* roof extensions: extra parts of the building that join the main block at the same height */}
+      {wings.map((g) => (
+        <group key={g.id}>
+          <mesh position={[g.x, H / 2, g.z]} castShadow receiveShadow>
+            <boxGeometry args={[g.w, H, g.d]} />
+            <meshStandardMaterial map={plaster} color="#f3ead9" roughness={0.92} />
+          </mesh>
+          <mesh position={[g.x, 0.25, g.z]}>
+            <boxGeometry args={[g.w + 0.1, 0.5, g.d + 0.1]} />
+            <meshStandardMaterial color="#8f877b" roughness={1} />
+          </mesh>
+        </group>
       ))}
       {/* plinth */}
       <mesh position={[0, 0.25, 0]}>
@@ -120,22 +136,18 @@ export default function HouseModel({ roof, site, obstacles = [], failing = false
           <meshStandardMaterial map={concrete} color={failing ? '#c46a6a' : '#ffffff'} roughness={0.95} />
           {failing && <Edges color="#ff2d2d" />}
         </mesh>
-        {ph > 0 && (
-          <>
-            {[[0, L / 2 + 0.05, W + 0.3, 0.2], [0, -L / 2 - 0.05, W + 0.3, 0.2]].map(([x, z, w, d], i) => (
-              <mesh key={`pz${i}`} position={[x, SLAB + ph / 2, z]} castShadow receiveShadow>
-                <boxGeometry args={[w, ph, d]} />
-                <meshStandardMaterial map={plaster} color="#efe4d1" roughness={0.95} />
-              </mesh>
-            ))}
-            {[W / 2 + 0.05, -W / 2 - 0.05].map((x, i) => (
-              <mesh key={`px${i}`} position={[x, SLAB + ph / 2, 0]} castShadow receiveShadow>
-                <boxGeometry args={[0.2, ph, L + 0.3]} />
-                <meshStandardMaterial map={plaster} color="#efe4d1" roughness={0.95} />
-              </mesh>
-            ))}
-          </>
-        )}
+        {wings.map((g) => (
+          <mesh key={g.id} position={[g.x, SLAB / 2, g.z]} castShadow receiveShadow>
+            <boxGeometry args={[g.w + 0.3, SLAB, g.d + 0.3]} />
+            <meshStandardMaterial map={concrete} color="#ffffff" roughness={0.95} />
+          </mesh>
+        ))}
+        {ph > 0 && walls.map((b, i) => (
+          <mesh key={`p${i}`} position={[b.x, SLAB + ph / 2, b.z]} castShadow receiveShadow>
+            <boxGeometry args={[b.w + (b.d > b.w ? 0 : 0.3), ph, b.d + (b.d > b.w ? 0.3 : 0)]} />
+            <meshStandardMaterial map={plaster} color="#efe4d1" roughness={0.95} />
+          </mesh>
+        ))}
         {failing && Array.from({ length: 8 }).map((_, i) => (
           <mesh key={`c${i}`} position={[-W * 0.3 + i * W * 0.08, SLAB + 0.01, (i % 2 ? 1 : -1) * L * 0.05]} rotation={[0, (i % 2 ? 0.6 : -0.6), 0]}>
             <boxGeometry args={[W * 0.1, 0.02, 0.07]} />
