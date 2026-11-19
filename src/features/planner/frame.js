@@ -9,6 +9,7 @@
 // +z = the front of the house.
 
 import { facingOf } from './shading';
+import { houseWings } from './roofShape';
 
 /** Sides of the house the panels can lean towards, in quarter turns from the front. */
 export const SIDES = ['front', 'right', 'back', 'left'];
@@ -56,7 +57,7 @@ export function arrayFrame(roof, site) {
   return {
     turn, odd, bearing, side: SIDES[turn], auto: !Number.isInteger(site?.panelDir),
     roof: odd ? { width: roof.length, length: roof.width } : roof,
-    site: { ...site, facing: bearing, items: (site.items || []).map(into), surroundings: (site.surroundings || []).map(into) },
+    site: { ...site, facing: bearing, items: (site.items || []).map(into), surroundings: (site.surroundings || []).map(into), wings: houseWings(roof, site).map(into) },
     point: (p) => { const [x, z] = TO_HOUSE[turn](p.x, p.z); return { ...p, x, z }; },
     box: back,
     rect: (k) => {
@@ -78,6 +79,7 @@ export function houseLayout(layout, frame) {
     footZ: frame.odd ? layout.colW - 0.03 : layout.depth,
     slots: layout.slots.map(frame.point),
     obstacles: layout.obstacles.map(frame.box),
+    wings: layout.wings.map(frame.box),
     keepOuts: layout.keepOuts.map(frame.rect),
     overflowSlot: (k) => frame.point(layout.overflowSlot(k)),
   };

@@ -4,9 +4,10 @@ import styled from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faMinus, faPlus, faPlug, faRulerCombined, faSolarPanel, faLocationCrosshairs, faPenRuler, faXmark, faCheck } from '@fortawesome/free-solid-svg-icons';
 import { APPLIANCES } from './appliances';
-import { CITIES, PANEL_OPTIONS, INVERTER_SIZES, nearestCity, ROOF_ITEMS, FACINGS, SURROUNDING } from './config';
+import { CITIES, PANEL_OPTIONS, INVERTER_SIZES, nearestCity, ROOF_ITEMS, FACINGS, SURROUNDING, STRUCTURES } from './config';
 import { ITEM_ICONS } from './RoofEditorUI';
 import { compassName } from './frame';
+import { WING } from './roofShape';
 import { SEASONS } from '../three/sun';
 import { Card, Label, Range, NumberInput, Select, Segmented, Seg, Toggle, Row, t } from './ui';
 
@@ -197,7 +198,10 @@ const pkrShort = (n) => (n >= 100000 ? `Rs ${(n / 100000).toFixed(n >= 1000000 ?
 
 function StructurePicker({ site, setSite, plan }) {
   const auto = plan.structureAuto;
-  const choose = (key) => setSite({ ...site, structure: key });
+  // picking a structure (or auto) puts its pillars back to the standard height
+  const choose = (key) => setSite({ ...site, structure: key, frontH: undefined });
+  const std = STRUCTURES[plan.structure.key];
+  const ft = (m) => (m / 0.3048).toFixed(1);
   const bestKey = plan.structureBest;
   return (
     <Field>
@@ -222,6 +226,21 @@ function StructurePicker({ site, setSite, plan }) {
           : <>You chose <b style={{ color: t.text }}>{plan.structure.label}</b>. Switch to Auto to let us pick.</>}
         {' '}Structure prices are indicative, per your system size.
       </Hint>
+      {!auto && std && (
+        <div style={{ marginTop: 10 }}>
+          <Row $justify="space-between">
+            <Label htmlFor="pl-pillar" style={{ margin: 0 }}>Front pillar height</Label>
+            <b style={{ fontSize: '0.86rem' }}>{ft(plan.structure.frontH)} ft</b>
+          </Row>
+          <Range id="pl-pillar" min={std.frontRange[0]} max={std.frontRange[1]} step={0.05} value={plan.structure.frontH}
+            onChange={(e) => setSite({ ...site, frontH: Number(e.target.value) })} />
+          <Hint>
+            Raise it to clear tanks, ACs or the parapet wall. The back pillars follow the tilt.
+            {Math.abs(plan.structure.frontH - std.frontH) > 0.01 && <>{' '}<LinkBtn type="button" style={{ marginTop: 0 }} onClick={() => setSite({ ...site, frontH: undefined })}>Standard height ({ft(std.frontH)} ft)</LinkBtn></>}
+            {' '}The price shown is for the standard height.
+          </Hint>
+        </div>
+      )}
     </Field>
   );
 }
@@ -303,6 +322,22 @@ function SiteTab({ location, setLocation, season, setSeason, site, setSite, roof
       <SubHead>Roof size</SubHead>
       {dim('width', 'Roof width (front)')}
       {dim('length', 'Roof depth')}
+      <Hint style={{ marginTop: 0 }}>Not a plain rectangle? Add the part that sticks out (an L, a T or a tail at the back), then drag it into place.</Hint>
+      {plan.layout.wings.length > 0 && (
+        <Items>
+          {plan.layout.wings.map((g) => (
+            <li key={g.id}>
+              <FontAwesomeIcon icon={ITEM_ICONS.wing} />
+              <span>{WING.label}</span>
+              <small>{g.w.toFixed(1)}×{g.d.toFixed(1)} m · {plan.layout.slots.filter((s) => s.wing === g.id).length} panels fit</small>
+              <button type="button" aria-label={`Remove ${WING.label}`} onClick={() => onRemoveItem(g.id)}><FontAwesomeIcon icon={faXmark} /></button>
+            </li>
+          ))}
+        </Items>
+      )}
+      <QuickAdd>
+        <button type="button" onClick={() => onAddItem('wing')}><FontAwesomeIcon icon={faPlus} /> {WING.label}</button>
+      </QuickAdd>
 
       <SubHead>Your house</SubHead>
       <Field>

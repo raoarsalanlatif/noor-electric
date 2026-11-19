@@ -2,12 +2,13 @@
 import styled from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-  faDoorClosed, faFaucetDrip, faFan, faTemperatureHigh, faCube, faCheck, faRotate, faTrash, faCopy, faHandPointer, faExpand, faCompress, faBuilding,
+  faDoorClosed, faFaucetDrip, faFan, faTemperatureHigh, faCube, faCheck, faRotate, faTrash, faCopy, faHandPointer, faExpand, faCompress, faBuilding, faVectorSquare,
 } from '@fortawesome/free-solid-svg-icons';
 import { ROOF_ITEMS, SURROUNDING } from './config';
+import { WING } from './roofShape';
 import { t } from './ui';
 
-export const ITEM_ICONS = { room: faDoorClosed, tank: faFaucetDrip, ac: faFan, geyser: faTemperatureHigh, other: faCube, building: faBuilding };
+export const ITEM_ICONS = { room: faDoorClosed, tank: faFaucetDrip, ac: faFan, geyser: faTemperatureHigh, other: faCube, building: faBuilding, wing: faVectorSquare };
 
 const Bar = styled.div`
   position: absolute; top: 12px; left: 12px; right: 12px; z-index: 3;
@@ -56,6 +57,9 @@ export function EditorToolbar({ tool, setTool, onDone, structureLabel, fits, ful
       <button type="button" className={tool === 'building' ? 'on' : ''} onClick={() => setTool(tool === 'building' ? null : 'building')} title="Place a nearby building to see its shadow">
         <FontAwesomeIcon icon={faBuilding} /><span>{SURROUNDING.label}</span>
       </button>
+      <button type="button" className={tool === 'wing' ? 'on' : ''} onClick={() => setTool(tool === 'wing' ? null : 'wing')} title="Add a part of the roof that sticks out from the main rectangle (L, T or tail shape)">
+        <FontAwesomeIcon icon={faVectorSquare} /><span>{WING.short}</span>
+      </button>
       {onTurnPanels && (
         <button type="button" onClick={onTurnPanels} title={`Panels lean towards the ${panelSide} of the house. Click to turn them to the next side.`}>
           <FontAwesomeIcon icon={faRotate} /><span>Turn panels</span>
@@ -76,7 +80,7 @@ export function EditorInspector({ item, tool, onChange, onRotate, onDuplicate, o
     return (
       <Inspector>
         <FontAwesomeIcon icon={faHandPointer} style={{ color: t.orange }} />
-        <span>{tool === 'building' ? <>Click on the ground next to the house to place a <b>nearby building</b>.</> : tool ? <>Click on the roof to place the <b>{ROOF_ITEMS[tool].label.toLowerCase()}</b>.</> : <>Pick an item above and click the roof to place it. Drag items to move them; click one to edit its size.</>}</span>
+        <span>{tool === 'building' ? <>Click on the ground next to the house to place a <b>nearby building</b>.</> : tool === 'wing' ? <>Click beside the house, on the side where the roof sticks out, to add a <b>roof extension</b>.</> : tool ? <>Click on the roof to place the <b>{ROOF_ITEMS[tool].label.toLowerCase()}</b>.</> : <>Pick an item above and click the roof to place it. Drag items to move them; click one to edit its size.</>}</span>
         <span className="legend" style={{ marginLeft: 'auto' }}>
           <span><i className="sw" style={{ background: '#60a5fa88' }} />Panel spots</span>
           <span><i className="sw" style={{ background: '#ef444488' }} />Blocked</span>
@@ -86,14 +90,20 @@ export function EditorInspector({ item, tool, onChange, onRotate, onDuplicate, o
     );
   }
   const building = item.type === 'building';
-  const def = building ? SURROUNDING : ROOF_ITEMS[item.type] || ROOF_ITEMS.other;
+  const wing = item.type === 'wing';
+  const def = building ? SURROUNDING : wing ? WING : ROOF_ITEMS[item.type] || ROOF_ITEMS.other;
   const field = (k, label, min, max) => (
     <label>{label}<input type="number" step="0.1" min={min} max={max} value={item[k]} onChange={(e) => onChange({ [k]: num(e.target.value, min, max) })} />m</label>
   );
   return (
     <Inspector>
       <b><FontAwesomeIcon icon={ITEM_ICONS[item.type] || faCube} /> {def.label}</b>
-      {building ? (
+      {wing ? (
+        <>
+          {field('w', 'Width', 1.5, 40)}{field('d', 'Depth', 1.5, 40)}
+          <span>Same height as the main roof · drag it along the house to where it really joins</span>
+        </>
+      ) : building ? (
         <>
           {field('w', 'Width', 2, 60)}{field('d', 'Depth', 2, 60)}{field('h', 'Height', 2, 120)}
           <span>≈ {Math.max(1, Math.round(item.h / 3.2))} storey{Math.round(item.h / 3.2) > 1 ? 's' : ''} · {Math.round(item.h / 0.3048)} ft · drag it to where it really stands</span>
@@ -110,7 +120,7 @@ export function EditorInspector({ item, tool, onChange, onRotate, onDuplicate, o
         </label>
       )}
       <span className="acts">
-        {item.type !== 'tank' && <button type="button" onClick={onRotate}><FontAwesomeIcon icon={faRotate} /> Rotate</button>}
+        {item.type !== 'tank' && !wing && <button type="button" onClick={onRotate}><FontAwesomeIcon icon={faRotate} /> Rotate</button>}
         <button type="button" onClick={onDuplicate}><FontAwesomeIcon icon={faCopy} /> Copy</button>
         <button type="button" className="del" onClick={onDelete}><FontAwesomeIcon icon={faTrash} /> Remove</button>
       </span>

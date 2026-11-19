@@ -44,12 +44,25 @@ export const PLANNER_CONFIG = {
  *   separate tables once the back would pass `maxBackH`.
  */
 export const STRUCTURES = {
-  L2: { key: 'L2', label: 'L2 frame', short: 'L2', frontH: 0.15, backFt: 2, costPerKW: 9000, desc: 'Low frame, about 2 ft at the back' },
-  L3: { key: 'L3', label: 'L3 frame', short: 'L3', frontH: 0.35, backFt: 3, costPerKW: 12000, desc: 'Raised frame, about 3 ft at the back' },
-  elevated: { key: 'elevated', label: 'Elevated structure', short: 'Elevated', elevated: true, frontH: 2.45, backFt: 10, costPerKW: 32000, desc: 'Steel structure 8–10 ft high, spans over tanks and ACs' },
+  L2: { key: 'L2', label: 'L2 frame', short: 'L2', frontH: 0.15, frontRange: [0.15, 0.6], backFt: 2, costPerKW: 9000, desc: 'Low frame, about 2 ft at the back' },
+  L3: { key: 'L3', label: 'L3 frame', short: 'L3', frontH: 0.35, frontRange: [0.3, 1.2], backFt: 3, costPerKW: 12000, desc: 'Raised frame, about 3 ft at the back' },
+  elevated: { key: 'elevated', label: 'Elevated structure', short: 'Elevated', elevated: true, frontH: 2.45, frontRange: [2.1, 3.7], backFt: 10, costPerKW: 32000, desc: 'Steel structure 8–10 ft high, spans over tanks and ACs' },
   // costPerKW here is a placeholder (more steel than the level frame): set it from your own price list
-  elevatedTilt: { key: 'elevatedTilt', label: 'Elevated tilted structure', short: 'Tilted', elevated: true, tilted: true, frontH: 2.45, maxBackH: 4.9, backFt: 16, costPerKW: 36000, desc: 'One sloped steel canopy, 8 ft at the front, panels edge to edge' },
+  elevatedTilt: { key: 'elevatedTilt', label: 'Elevated tilted structure', short: 'Tilted', elevated: true, tilted: true, frontH: 2.45, frontRange: [2.1, 3.7], maxBackH: 4.9, backFt: 16, costPerKW: 36000, desc: 'One sloped steel canopy, 8 ft at the front, panels edge to edge' },
 };
+/**
+ * A structure with the customer's own front pillar height. `site.frontH` (metres) applies only to the
+ * structure the customer picked by hand; on auto every structure keeps its standard height.
+ * The back pillars follow from the tilt, so a tilted table's height limit moves up with the front.
+ */
+export function structureFor(key, site) {
+  const st = STRUCTURES[key] || STRUCTURES.L2;
+  const h = Number(site?.frontH);
+  if (site?.structure !== st.key || !Number.isFinite(h)) return st;
+  const frontH = Math.min(st.frontRange[1], Math.max(st.frontRange[0], h));
+  return { ...st, frontH, ...(st.maxBackH ? { maxBackH: st.maxBackH + (frontH - st.frontH) } : {}) };
+}
+
 export const STRUCTURE_ORDER = ['L2', 'L3', 'elevated', 'elevatedTilt'];
 
 /** Things a customer can place on the roof in the 3D editor. Sizes in metres (w = east–west, d = north–south). */
@@ -130,6 +143,7 @@ export const DEFAULT_SITE = {
   // or 0 front, 1 right, 2 back, 3 left (as seen from the street).
   panelDir: 'auto',
   surroundings: [], // nearby buildings that may shade the roof
+  wings: [], // roof extensions that join the main rectangle (L, T or tail shapes); see roofShape.js
   tilt: 15, // panel tilt in degrees, set by the L2 / L3 frames; not a customer choice
   // 'compact' keeps a walkway between rows and fits the most panels (shade between rows is counted).
   // 'winter' opens the rows so none shades the next between 10 am and 2 pm on 21 December; offered as a fix.

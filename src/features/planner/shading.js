@@ -9,6 +9,7 @@
 import { sunFor, sunPosition, dailyShape } from '../three/sun';
 import { houseHeight, tiltRad, REF_TILT_DEG } from '../three/dims';
 import { PLANNER_CONFIG as CFG, FACINGS } from './config';
+import { parapetRuns, runBox } from './roofShape';
 
 const REF_TILT = (REF_TILT_DEG * Math.PI) / 180;
 const REF_NORMAL = [0, Math.cos(REF_TILT), Math.sin(REF_TILT)];
@@ -65,11 +66,8 @@ export function roofBoxes(roof, site, layout) {
   const out = (layout.obstacles || []).map((o) => box(o.x, o.z, o.w, o.d, H, H + o.top));
   const ph = Number(site?.parapetH) || 0;
   if (ph > 0) {
-    const W = roof.width; const L = roof.length;
-    out.push(
-      box(0, L / 2 - WALL / 2, W, WALL, H, H + ph), box(0, -L / 2 + WALL / 2, W, WALL, H, H + ph),
-      box(W / 2 - WALL / 2, 0, WALL, L, H, H + ph), box(-W / 2 + WALL / 2, 0, WALL, L, H, H + ph),
-    );
+    // walls run along the outer edges of the main roof and of any extensions
+    parapetRuns(roof, site).forEach((run) => { const b = runBox(run, WALL); out.push(box(b.x, b.z, b.w, b.d, H, H + ph)); });
   }
   return out;
 }
