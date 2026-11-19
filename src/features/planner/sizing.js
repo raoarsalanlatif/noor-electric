@@ -1,5 +1,6 @@
 import { APPLIANCE_MAP, PROFILES } from './appliances';
-import { PLANNER_CONFIG as CFG, PANEL_OPTIONS, INVERTER_SIZES, CITIES, DEFAULT_SITE, STRUCTURES, STRUCTURE_ORDER } from './config';
+import { PLANNER_CONFIG as CFG, PANEL_OPTIONS, INVERTER_SIZES, CITIES, DEFAULT_SITE, STRUCTURES, STRUCTURE_ORDER, structureFor } from './config';
+import { houseWings, roofArea } from './roofShape';
 import { dailyShape, seasonOf, sunFor } from '../three/sun';
 import { tiltRad, tiltDeg, REF_TILT_DEG } from '../three/dims';
 import { computeShading, facingOf } from './shading';
@@ -139,7 +140,7 @@ function roomTopSlots(room, obstacles, colW, depth, pitch) {
  * front of the house unless the roof and site were turned first (see frame.js).
  */
 export function roofLayout(roof, panel, site = DEFAULT_SITE, structureKey = 'L2', lat = 32) {
-  const structure = STRUCTURES[structureKey] || STRUCTURES.L2;
+  const structure = structureFor(structureKey, site);
   const elevated = Boolean(structure.elevated);
   const tilted = Boolean(structure.tilted);
   const depth = panel.length * Math.cos(tiltRad(site));
@@ -154,44 +155,49 @@ export function roofLayout(roof, panel, site = DEFAULT_SITE, structureKey = 'L2'
   const wallAbove = elevated ? 0 : Math.max(0, (site.parapetH || 0) - structure.frontH);
   const sFront = elevated ? 0.3 : Math.max(CFG.roofSetback, 0.3 + wallAbove * 1.6);
   const sOther = elevated ? 0.3 : Math.max(CFG.roofSetback, 0.3 + wallAbove * 0.8);
-  const usableW = Math.max(0, roof.width - 2 * sOther);
-  const cols = Math.max(0, Math.floor(usableW / colW));
-  const startX = -((cols - 1) * colW) / 2;
   const obstacles = roofObstacles(roof, site);
   const keepOuts = keepOutZones(obstacles, structure);
   const hits = (x, z) => keepOuts.some((k) => x + colW / 2 > k.x0 && x - colW / 2 < k.x1 && z + depth / 2 > k.z0 && z - depth / 2 < k.z1);
+  const stepUp = pitch * Math.tan(tiltRad(site));
+  const perTable = tilted ? Math.max(1, Math.floor((structure.maxBackH - structure.frontH) / (panel.length * Math.sin(tiltRad(site))))) : 1;
+  let rows = 0; let tables = 0;
 
-  // `base` is the height of the panel's low front edge above the roof
-  const roofSlots = [];
-  let rows = 0;
-  const zEnd = roof.length / 2 - sFront - depth / 2 + 1e-6;
-  if (tilted) {
-    // One sloped table: every row back from the front sits one step higher. When the back edge would pass
-    // the structure's height limit, a new table starts behind a gap wide enough to stay out of its shadow.
-    const stepUp = pitch * Math.tan(tiltRad(site));
-    const perTable = Math.max(1, Math.floor((structure.maxBackH - structure.frontH) / (panel.length * Math.sin(tiltRad(site)))));
-    let z = -roof.length / 2 + sOther + depth / 2;
-    for (let table = 0; z <= zEnd; table++) {
-      const n = Math.min(perTable, Math.floor((zEnd - z) / pitch) + 1);
-      for (let i = 0; i < n; i++) {
-        rows += 1;
-        for (let c = 0; c < cols; c++) {
-          const x = startX + c * colW; const rz = z + i * pitch;
-          if (!hits(x, rz)) roofSlots.push({ x, z: rz, base: structure.frontH + (n - 1 - i) * stepUp, table });
-        }
-      }
-      rowGap = Math.max(CFG.rowGap, winterGap * n);
-      z += (n - 1) * pitch + depth + rowGap;
-    }
-  } else {
-    for (let z = -roof.length / 2 + sOther + depth / 2; z <= zEnd; z += pitch) {
+  // Fill one rectangle of the roof (centre cx, cz) with panel spots. `base` is the height of a panel's low
+  // front edge above the roof.
+  const fill = (cx, cz, width, length, tag) => {
+    const out = [];
+    const nCols = Math.max(0, Math.floor(Math.max(0, width - 2 * sOther) / colW));
+    const x0 = cx - ((nCols - 1) * colW) / 2;
+    const zEnd = cz + length / 2 - sFront - depth / 2 + 1e-6;
+    let z = cz - length / 2 + sOther + depth / 2;
+    const row = (rz, base, extra) => {
       rows += 1;
-      for (let c = 0; c < cols; c++) {
-        const x = startX + c * colW;
-        if (!hits(x, z)) roofSlots.push({ x, z, base: structure.frontH });
+      for (let c = 0; c < nCols; c++) {
+        const x = x0 + c * colW;
+        if (!hits(x, rz)) out.push({ x, z: rz, base, ...extra, ...tag });
       }
+    };
+    if (tilted) {
+      // One sloped table: every row back from the front sits one step higher. When the back edge would pass
+      // the structure's height limit, a new table starts behind a gap wide enough to stay out of its shadow.
+      for (; z <= zEnd; tables++) {
+        const n = Math.min(perTable, Math.floor((zEnd - z) / pitch) + 1);
+        for (let i = 0; i < n; i++) row(z + i * pitch, structure.frontH + (n - 1 - i) * stepUp, { table: tables });
+        rowGap = Math.max(CFG.rowGap, winterGap * n);
+        z += (n - 1) * pitch + depth + rowGap;
+      }
+    } else {
+      for (; z <= zEnd; z += pitch) row(z, structure.frontH);
     }
-  }
+    return { slots: out, cols: nCols };
+  };
+  const main = fill(0, 0, roof.width, roof.length, {});
+  const cols = main.cols;
+  const mainRows = rows;
+  // roof extensions are filled after the main roof
+  const wings = houseWings(roof, site);
+  const wingSlots = wings.flatMap((g) => fill(g.x, g.z, g.w, g.d, { wing: g.id }).slots);
+  const roofSlots = [...main.slots, ...wingSlots];
   // panels on top of a room come first: that is where the installer starts, to save roof space
   const roomSlots = obstacles.filter((o) => o.type === 'room' && o.panelsOnTop).flatMap((room) => roomTopSlots(room, obstacles, colW, depth, pitch));
   const slots = [...roomSlots, ...roofSlots];
@@ -203,11 +209,11 @@ export function roofLayout(roof, panel, site = DEFAULT_SITE, structureKey = 'L2'
     z: roof.length / 2 + 0.4 + depth / 2 + Math.floor(k / ovCols) * pitch,
   });
   return {
-    structure, cols, rows, pitch, colW, depth, sFront, sOther, rowGap, winterSafe, tilted,
-    slots, obstacles, keepOuts, overflowSlot, onRooms: roomSlots.length,
+    structure, cols, rows: mainRows, pitch, colW, depth, sFront, sOther, rowGap, winterSafe, tilted,
+    slots, obstacles, keepOuts, overflowSlot, onRooms: roomSlots.length, wings, onWings: wingSlots.length,
     maxPanels: slots.length,
     footprint: pitch * colW,
-    roofArea: roof.width * roof.length,
+    roofArea: roofArea(roof, site),
   };
 }
 

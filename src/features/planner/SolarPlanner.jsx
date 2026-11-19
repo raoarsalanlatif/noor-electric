@@ -13,6 +13,7 @@ import SunAccessCard from './SunAccessCard';
 import { computePlan } from './sizing';
 import { DEFAULT_LOAD } from './appliances';
 import { CITIES, DEFAULT_SITE, ROOF_ITEMS, SURROUNDING } from './config';
+import { WING } from './roofShape';
 import { EditorToolbar, EditorInspector } from './RoofEditorUI';
 import { useFullscreen, fullscreenCss } from '../../lib/useFullscreen';
 import { sunPosition } from '../three/sun';
@@ -250,9 +251,10 @@ export default function SolarPlanner() {
     return shot;
   }, []);
   const fs = useFullscreen(sceneRef);
-  // Roof items live in site.items, nearby buildings in site.surroundings; an id is in one list or the other.
+  // Roof items live in site.items, nearby buildings in site.surroundings and roof extensions in site.wings;
+  // an id is in exactly one of the lists.
   const updateItems = useCallback((fn, id) => setSite((st) => {
-    const key = id && (st.surroundings || []).some((b) => b.id === id) ? 'surroundings' : 'items';
+    const key = ['surroundings', 'wings'].find((k) => id && (st[k] || []).some((b) => b.id === id)) || 'items';
     return { ...st, [key]: fn(st[key] || []) };
   }), []);
   const addItem = useCallback((type, x = 0, z = 0) => {
@@ -260,6 +262,8 @@ export default function SolarPlanner() {
     if (type === 'building') {
       const b = { id, type, x, z, w: SURROUNDING.w, d: SURROUNDING.d, h: SURROUNDING.h };
       setSite((st) => ({ ...st, surroundings: [...(st.surroundings || []), b] }));
+    } else if (type === 'wing') {
+      setSite((st) => ({ ...st, wings: [...(st.wings || []), { id, type, x, z, w: WING.w, d: WING.d }] }));
     } else {
       const def = ROOF_ITEMS[type] || ROOF_ITEMS.other;
       updateItems((items) => [...items, { id, type, x, z, w: def.w, d: def.d, h: def.h }]);
@@ -286,7 +290,7 @@ export default function SolarPlanner() {
     setEditing(false); setTool(null); setSelectedId(null); crewCtl.current.replay += 1;
     clock.current.playing = true; setPlaying(true);
   };
-  const aroundHouse = tool === 'building' || (site.surroundings || []).some((b) => b.id === selectedId);
+  const aroundHouse = tool === 'building' || tool === 'wing' || [...(site.surroundings || []), ...(site.wings || [])].some((b) => b.id === selectedId);
   const editor = useMemo(() => ({
     editing, tool, selectedId, wide: aroundHouse,
     onPlace: (type, x, z) => addItem(type, x, z),
@@ -351,7 +355,7 @@ export default function SolarPlanner() {
             site={site} setSite={setSite}
             onEditRoof={openEditor} onRemoveItem={removeItem}
             onRoomPanels={(id, on) => changeItem(id, { panelsOnTop: on })}
-            onAddItem={(type) => { if (type === 'building') addItem(type, 0, roof.length / 2 + SURROUNDING.d / 2 + 6); else addItem(type, 0, 0); openEditor(); }}
+            onAddItem={(type) => { if (type === 'building') addItem(type, 0, roof.length / 2 + SURROUNDING.d / 2 + 6); else if (type === 'wing') addItem(type, 0, -roof.length); else addItem(type, 0, 0); openEditor(); }}
             roof={roof} setRoof={setRoof}
             panelWatts={panelWatts} setPanelWatts={setPanelWatts}
             mode={mode} setMode={setMode}
@@ -368,8 +372,8 @@ export default function SolarPlanner() {
                 clock={clock} onHour={onHour} crewCtl={crewCtl} onProgress={onProgress} editor={editor} captureRef={captureRef} shadeMap={shadeMap && !editing} />
             </Suspense>
             {editing && (() => {
-              const sel = plan.layout.obstacles.find((o) => o.id === selectedId) || plan.shading.buildings.find((b) => b.id === selectedId);
-              const raw = (site.items || []).find((o) => o.id === selectedId) || (site.surroundings || []).find((b) => b.id === selectedId);
+              const sel = [...plan.layout.obstacles, ...plan.shading.buildings, ...plan.layout.wings].find((o) => o.id === selectedId);
+              const raw = [...(site.items || []), ...(site.surroundings || []), ...(site.wings || [])].find((o) => o.id === selectedId);
               return (
                 <>
                   <EditorToolbar tool={tool} setTool={setTool} onDone={closeEditor} structureLabel={plan.structure.label} fits={plan.layout.maxPanels} fullscreen={fs.active} onFullscreen={fs.toggle}
@@ -378,7 +382,7 @@ export default function SolarPlanner() {
                     item={raw && sel ? { ...raw, ...sel } : null} tool={tool}
                     onChange={(patch) => changeItem(selectedId, patch)}
                     onRotate={() => raw && changeItem(selectedId, { w: raw.d, d: raw.w })}
-                    onDuplicate={() => raw && addItem(raw.type, raw.type === 'building' ? sel.x + sel.w + 1 : Math.min(roof.width / 2, raw.x + raw.w + 0.3), raw.type === 'building' ? sel.z : raw.z)}
+                    onDuplicate={() => raw && addItem(raw.type, raw.type === 'building' ? sel.x + sel.w + 1 : raw.type === 'wing' ? -sel.x : Math.min(roof.width / 2, raw.x + raw.w + 0.3), raw.type === 'building' ? sel.z : raw.type === 'wing' ? -sel.z : raw.z)}
                     onDelete={() => removeItem(selectedId)}
                   />
                 </>

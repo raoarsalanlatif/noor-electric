@@ -468,6 +468,7 @@ function NearbyBuilding({ b }) {
 // panels can't go (the item, a walkway around it and its shadow); blue outlines are the
 // panel positions that remain for the current structure.
 function RoofEditor({ layout, roof, roofTop, tool, selectedId, onPlace, onSelect, onMoveItem, onDragChange, buildings = [], south = [0, 1] }) {
+  const wings = layout.wings || [];
   const [drag, setDrag] = useState(null);
   const setCursor = (c) => { document.body.style.cursor = c; };
   useEffect(() => () => setCursor(''), []);
@@ -490,7 +491,7 @@ function RoofEditor({ layout, roof, roofTop, tool, selectedId, onPlace, onSelect
         onPointerDown={(e) => {
           if (drag) return;
           e.stopPropagation();
-          if (tool === 'building') return; // buildings go on the ground, not on the roof
+          if (tool === 'building' || tool === 'wing') return; // these go beside the house, not on the roof
           if (tool) onPlace(tool, e.point.x, e.point.z); else onSelect(null);
         }}
       >
@@ -544,9 +545,34 @@ function RoofEditor({ layout, roof, roofTop, tool, selectedId, onPlace, onSelect
         );
       })}
 
-      {/* ground around the house: click to place a nearby building */}
-      {tool === 'building' && (
-        <mesh position={[0, 0.07, 0]} rotation={[-Math.PI / 2, 0, 0]} onPointerDown={(e) => { if (drag) return; e.stopPropagation(); onPlace('building', e.point.x, e.point.z); }}>
+      {/* grab handles for the roof extensions: drag one along the house to where it really joins */}
+      {wings.map((g) => {
+        const selected = g.id === selectedId;
+        return (
+          <mesh
+            key={g.id}
+            position={[g.x, roofTop + 0.2, g.z]}
+            onPointerOver={(e) => { e.stopPropagation(); if (!drag) setCursor('grab'); }}
+            onPointerOut={() => { if (!drag) setCursor(tool ? 'copy' : ''); }}
+            onPointerDown={(e) => {
+              if (tool && tool !== 'wing') return; // let a roof item be placed on it
+              e.stopPropagation();
+              onSelect(g.id);
+              setDrag({ id: g.id, dx: g.x - e.point.x, dz: g.z - e.point.z, y: e.point.y });
+              onDragChange(true);
+              setCursor('grabbing');
+            }}
+          >
+            <boxGeometry args={[g.w, 0.5, g.d]} />
+            <meshBasicMaterial transparent opacity={selected ? 0.16 : 0.04} color="#facc15" depthWrite={false} />
+            {selected && <Edges color="#facc15" lineWidth={2} />}
+          </mesh>
+        );
+      })}
+
+      {/* ground around the house: click to place a nearby building or a roof extension */}
+      {(tool === 'building' || tool === 'wing') && (
+        <mesh position={[0, 0.07, 0]} rotation={[-Math.PI / 2, 0, 0]} onPointerDown={(e) => { if (drag) return; e.stopPropagation(); onPlace(tool, e.point.x, e.point.z); }}>
           <planeGeometry args={[320, 320]} />
           <meshBasicMaterial transparent opacity={0} depthWrite={false} />
         </mesh>
@@ -664,7 +690,7 @@ function SceneContent({ plan, roof, site, lat, season, clock, onHour, crewCtl, o
       {buildings.map((b) => <NearbyBuilding key={b.id} b={b} />)}
       {/* soft ground shadow under the house: drawn once, and again only when the house or its neighbours change */}
       <ContactShadows key={`${roof.width}:${roof.length}:${roofTop}:${buildings.map((b) => `${b.x.toFixed(1)},${b.z.toFixed(1)},${b.w},${b.d}`).join(';')}`} frames={1} position={[0, 0.04, 0]} opacity={0.3} scale={70} blur={2.4} far={14} />
-      <HouseModel roof={roof} site={site} obstacles={layout.obstacles} failing={failing} litRef={lit} />
+      <HouseModel roof={roof} site={site} obstacles={layout.obstacles} wings={layout.wings} failing={failing} litRef={lit} />
       {elevated && !editing && <ElevatedFrame layout={layout} roofTop={roofTop} tilt={tilt} turnY={turnY} />}
       {editing && (
         <RoofEditor
